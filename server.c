@@ -3,7 +3,14 @@
 #include <unistd.h> // std lib
 #include <sys/socket.h>  // socket lib
 #include <stdio.h>  // std input
+#include <stdlib.h>
+#include <dirent.h> // to use dir
+#include <string.h>
 #include "common.h"
+
+void analyzeCalls(char req[], int fd); 
+void listAll(int fd);
+void dirEnd(int fd);
 
 int main(){
 
@@ -32,17 +39,60 @@ int main(){
     fds[1]= client_fd;
     if(client_fd == -1) errNClose("accept",fds);
 
-    char buffer[BUFFER_SIZE];
-    int bytes = receiveMessage(client_fd,buffer,sizeof(buffer));
 
-    if(bytes == -1) errNClose("read",fds);
-    buffer[bytes]='\0';
-    printf("client: %s\n",buffer);
+    // extracting the headder of the protocol
+    uint32_t netLength ;
+    recv_all(client_fd,&netLength,sizeof(netLength));
+    uint32_t length = ntohl(netLength);
 
-    int writeRes = sendMessage(client_fd,buffer);
-    if(writeRes == -1 ) errNClose("write",fds);
+    if(length > 1000) return -1; // overlimit memory call
 
+    // allocating the memory reviced from client 
+    char *buffer;
+    buffer = (char *) malloc(length + 1);
+
+    if(buffer == NULL) return -1; // if the malloc fails
+    int bytes = recv_all(client_fd,buffer,length);
+
+    if(bytes == -1){
+        errNClose("read",fds);
+        return -1;
+    }
+
+    buffer[bytes] = '\0';
+
+    printf("%s\n",buffer);
+
+    analyzeCalls(buffer,client_fd);
+    dirEnd(client_fd);
+
+    free(buffer); 
     closeFD(fds);
-
     return 0;
+}
+
+void analyzeCalls(char req[],int fd){
+    char listCall[] = "LIST";
+    if(strcmp(listCall,req)){
+        listAll(fd); // to be defined
+    }
+}
+
+void listAll(int fd){
+    DIR *dir = opendir(".");
+    struct dirent *entry;
+
+	while ((entry = readdir(dir)) != NULL) {
+        char *file = entry->d_name;
+        int bytes = send_all(fd,file,sizeof(file));
+        if(bytes == -1) return;
+	}
+
+    closedir(dir);
+	// closedir(dir); // might not cause we still need res from client in next phase
+}
+
+void dirEnd(int fd){
+    char *msg = "end";
+    send_all(fd,msg,sizeof(msg));
 }
