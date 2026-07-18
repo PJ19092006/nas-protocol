@@ -10,18 +10,17 @@
 #include <string.h>
 
 
-void errNClose(const char *msg,int arrFDS[]){
-    closeFD(arrFDS);
+void errNClose(const char *msg,int fd){
+    closeFd(fd);
     perror(msg);
     exit(EXIT_FAILURE);
 }
 
-void closeFD(int arrFDS[]){
-    for(int i = 0; i<2 || arrFDS[i] == 0;i++){
-            close(arrFDS[i]);
-    }
+void closeFd(int fd){
+    close(fd);
 }
-int createSocket(void){
+
+int createSocket(){
     int sock = socket(AF_INET, SOCK_STREAM, 0);
 
     if (sock == -1) {
@@ -31,15 +30,7 @@ int createSocket(void){
     return sock;  
 }
 
-int sendMessage(int fd, const char *msg){
-    int bytes = write(fd,msg,strlen(msg));
-    return bytes;
-}
-int receiveMessage(int fd, char *buffer, size_t size){
-    int bytes = read(fd,buffer,size);
-    return bytes;
-}
-
+// just becuase the TCP will not transfer the whole file at once (so a loop to keep track of that)
 int send_all(int sock, const void *buffer, uint32_t length){
     const char *ptr = buffer;
     size_t remaining = length;
@@ -68,6 +59,24 @@ int send_msg (int fd , const void *buffer, uint32_t length){
     return lengthBytes + msgBytes;
 }
 
+char *getMsg(int client_fd){
+    // extracting headder (length)
+    uint32_t headder = getHeadder(client_fd);
+    if(headder > 1000) return err; // overlimit memory call
+
+    // alocating memory
+    char *buffer;
+    buffer = (char *) malloc(headder + 1);
+    if(buffer == NULL) return err;
+
+    // recive the msg
+    int bytes = recv_all(client_fd,buffer,headder);
+
+    buffer[bytes] = '\0';
+
+    return buffer;
+}
+
 int recv_all(int fd, void *buffer, size_t length){
     char *ptr = buffer;
     ssize_t remaining = length;
@@ -82,4 +91,12 @@ int recv_all(int fd, void *buffer, size_t length){
     }
 
     return bytes;
+}
+
+uint32_t getHeadder(int client_fd){
+    uint32_t netLength ;
+    recv_all(client_fd,&netLength,sizeof(netLength));
+    uint32_t length = ntohl(netLength);
+
+    return length;
 }

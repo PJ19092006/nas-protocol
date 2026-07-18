@@ -7,48 +7,49 @@
 #include <stdlib.h>
 #include "common.h"
 
+int connectServer(int sock);
 
 int main(){
-
+    // create sock
     int sock = createSocket();
-    int fd[1] = {sock}; 
-    if (sock == -1)errNClose("socket",fd);
+    if (sock == -1)errNClose("socket",sock);
 
+    // connect to server
+    int connectRes = connectServer(sock);
+    if (connectRes == -1) errNClose("connect", sock);
+
+    // send the msg to server
+    char msg[] = "LIST";
+    int bytes = send_msg(sock, msg, strlen(msg));
+    if (bytes == -1)errNClose("read",sock);
+
+    char end[] = "end"; // declaring to check if file dir ended (this is for now only, to be changed)
+
+    // listning for dir (response)
+    while(1){
+        char *store = getMsg(sock);
+        if(strcmp(store,err) == 0){
+            return -1;
+        }
+        printf("%s\n",store);
+        if (strcmp(end,store) == 0){
+            free(store);
+            break;
+        }
+    }
+
+    closeFd(sock);
+    return 0;
+}
+
+
+int connectServer(int sock){
     struct sockaddr_in server = {0};
     server.sin_family = AF_INET;
     server.sin_port = htons(5000);
     server.sin_addr.s_addr = inet_addr("127.0.0.1"); // addr of client
 
     int connectRes = connect(sock,(struct sockaddr *)&server,sizeof(server));
-    if (connectRes == -1) errNClose("connect",fd);
 
-    // new code
-    char msg[] = "LIST";
-    int bytes = send_msg(sock, msg, strlen(msg));
-    if (bytes == -1)errNClose("read",fd);
-    // end
-
-    while(1 == 1){
-
-    uint32_t netLength ;
-    recv_all(sock,&netLength,sizeof(netLength));
-    uint32_t length = ntohl(netLength);
-
-    if(length > 1000) return -1; // overlimit memory call
-
-    // allocating the memory reviced from server
-    char *buffer;
-    buffer = (char *) malloc(length + 1);
-
-    if(buffer == NULL) return -1; // if the malloc fails
-    int bytes = recv_all(sock,buffer,length);
-    buffer[bytes] = '\0';
-    char end[] = "end";
-    if (strcmp(end,buffer)) return 0;
-    
-    printf("%s\n",buffer);
-    }
-
-    closeFD(fd);
-    return 0;
+    return connectRes;
 }

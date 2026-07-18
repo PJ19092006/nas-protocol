@@ -8,73 +8,51 @@
 #include <string.h>
 #include "common.h"
 
-void analyzeCalls(char req[], int fd); 
+void analyzeCalls(char *req, int fd); 
 void listAll(int fd);
 void dirEnd(int fd);
+int bindSocket(int sock);
 
 int main(){
-
+    // create socket
     int sock = createSocket();
-    int fds[2] = {sock,0};
-    if (sock == -1) errNClose("socket",fds);
+    if (sock == -1) errNClose("socket",sock);
 
-    struct sockaddr_in address = {0};
-    address.sin_family = AF_INET;
-    address.sin_port = htons(PORT);
-    address.sin_addr.s_addr = INADDR_ANY;
+    // bind socket
+    int bindRes = bindSocket(sock);
+    if (bindRes == -1) errNClose("bind", sock);
 
-    int bindres = bind(
-        sock,
-        (struct sockaddr *)&address,
-        sizeof(address)
-    );
-
-    if(bindres == -1) errNClose("bind",fds);
-
+    // listen for req
     int listenRes = listen(sock,5);
-    if (listenRes == -1) errNClose("listen",fds);
+    if (listenRes == -1) errNClose("listen",sock);
 
+    // accept the req
     int client_fd = accept(sock, NULL, NULL);
-
-    fds[1]= client_fd;
-    if(client_fd == -1) errNClose("accept",fds);
-
-
-    // extracting the headder of the protocol
-    uint32_t netLength ;
-    recv_all(client_fd,&netLength,sizeof(netLength));
-    uint32_t length = ntohl(netLength);
-
-    if(length > 1000) return -1; // overlimit memory call
-
-    // allocating the memory reviced from client 
-    char *buffer;
-    buffer = (char *) malloc(length + 1);
-
-    if(buffer == NULL) return -1; // if the malloc fails
-    int bytes = recv_all(client_fd,buffer,length);
-
-    if(bytes == -1){
-        errNClose("read",fds);
-        return -1;
+    if(client_fd == -1){
+        errNClose("accpet",client_fd);
+        closeFd(sock);
     }
 
-    buffer[bytes] = '\0';
-
+    // extracting the headder of the protocol (res)
+    char *buffer = getMsg(client_fd);
+    if (strcmp(buffer,err) == 0){
+        return -1;
+    }
+    
     printf("%s\n",buffer);
-
     analyzeCalls(buffer,client_fd);
     dirEnd(client_fd);
 
     free(buffer); 
-    closeFD(fds);
+    closeFd(sock);
+    closeFd(client_fd);
     return 0;
 }
 
-void analyzeCalls(char req[],int fd){
+void analyzeCalls(char *req,int fd){
     char listCall[] = "LIST";
-    if(strcmp(listCall,req)){
-        listAll(fd); // to be defined
+    if(strcmp(listCall,req) == 0){
+        listAll(fd);
     }
 }
 
@@ -84,15 +62,29 @@ void listAll(int fd){
 
 	while ((entry = readdir(dir)) != NULL) {
         char *file = entry->d_name;
-        int bytes = send_all(fd,file,sizeof(file));
+        int bytes = send_msg(fd,file,strlen(file));
         if(bytes == -1) return;
 	}
 
     closedir(dir);
-	// closedir(dir); // might not cause we still need res from client in next phase
 }
 
 void dirEnd(int fd){
     char *msg = "end";
-    send_all(fd,msg,sizeof(msg));
+    send_msg(fd,msg,strlen(msg));
+}
+
+int bindSocket(int sock){
+    struct sockaddr_in address = {0};
+    address.sin_family = AF_INET;
+    address.sin_port = htons(PORT);
+    address.sin_addr.s_addr = INADDR_ANY;
+
+    int bindRes = bind(
+        sock,
+        (struct sockaddr *)&address,
+        sizeof(address)
+    );
+
+    return bindRes;
 }
