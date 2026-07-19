@@ -26,17 +26,8 @@ int main(){
     char end[] = "end"; // declaring to check if file dir ended (this is for now only, to be changed)
 
     // listning for dir (response)
-    while(1){
-        char *store = getMsg(sock);
-        if(strcmp(store,err) == 0){
-            return -1;
-        }
-        printf("%s\n",store);
-        if (strcmp(end,store) == 0){
-            free(store);
-            break;
-        }
-    }
+    int x = getFiles(sock);
+    if (x == -1) errNClose("read",sock);
 
     closeFd(sock);
     return 0;

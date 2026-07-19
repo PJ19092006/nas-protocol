@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <dirent.h> // to use dir
 #include <string.h>
+#include <fcntl.h>
 #include "common.h"
 
 void analyzeCalls(char *req, int fd); 
@@ -35,9 +36,7 @@ int main(){
 
     // extracting the headder of the protocol (res)
     char *buffer = getMsg(client_fd);
-    if (strcmp(buffer,err) == 0){
-        return -1;
-    }
+    if (buffer == NULL) return -1;
     
     printf("%s\n",buffer);
     analyzeCalls(buffer,client_fd);
@@ -51,20 +50,40 @@ int main(){
 
 void analyzeCalls(char *req,int fd){
     char listCall[] = "LIST";
+    char opendDirCall[] = "GET";
+
     if(strcmp(listCall,req) == 0){
         listAll(fd);
+    }else if(strncmp(opendDirCall,req,4) == 0){
+        char *filename = req + 4;
+        printf("%s\n", filename);
+        	int fileFd = open("new.txt", O_RDONLY);
+            // read(fileFd,)
+            close(fileFd);
     }
 }
 
 void listAll(int fd){
     DIR *dir = opendir(".");
     struct dirent *entry;
+    int count = 0;
 
 	while ((entry = readdir(dir)) != NULL) {
+        count ++;
+	}
+
+    uint32_t toalFiles = htonl(count);
+    send_all(fd,&toalFiles,sizeof(toalFiles));
+
+    closedir(dir);
+    dir = opendir(".");
+
+    for(int i = 0; i<count; i++){
+        entry = readdir(dir);
         char *file = entry->d_name;
         int bytes = send_msg(fd,file,strlen(file));
         if(bytes == -1) return;
-	}
+    }
 
     closedir(dir);
 }

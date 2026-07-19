@@ -59,22 +59,35 @@ int send_msg (int fd , const void *buffer, uint32_t length){
     return lengthBytes + msgBytes;
 }
 
-char *getMsg(int client_fd){
+char *getMsg(int fd){
     // extracting headder (length)
-    uint32_t headder = getHeadder(client_fd);
-    if(headder > 1000) return err; // overlimit memory call
+    uint32_t headder = getHeadder(fd);
+    if(headder > 1000) return NULL; // overlimit memory call
 
     // alocating memory
     char *buffer;
     buffer = (char *) malloc(headder + 1);
-    if(buffer == NULL) return err;
+    if(buffer == NULL) return NULL;
 
     // recive the msg
-    int bytes = recv_all(client_fd,buffer,headder);
+    int bytes = recv_all(fd,buffer,headder);
 
     buffer[bytes] = '\0';
 
     return buffer;
+}
+
+int getFiles(int fd){
+    uint32_t totalFiles = getHeadder(fd);
+
+    while(totalFiles>0){
+        char *store = getMsg(fd);
+        if(store == NULL) return -1;
+
+        printf("%s\n",store);
+        totalFiles--;
+        free(store);
+    }
 }
 
 int recv_all(int fd, void *buffer, size_t length){
@@ -95,7 +108,8 @@ int recv_all(int fd, void *buffer, size_t length){
 
 uint32_t getHeadder(int client_fd){
     uint32_t netLength ;
-    recv_all(client_fd,&netLength,sizeof(netLength));
+    int res = recv_all(client_fd,&netLength,sizeof(netLength));
+    if (res == -1) return UINT32_MAX;
     uint32_t length = ntohl(netLength);
 
     return length;
