@@ -1,13 +1,3 @@
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <stdio.h>  
-#include <stdlib.h>
-#include <dirent.h> 
-#include <string.h>
-#include <fcntl.h>
-#include <sys/stat.h>
 #include "common.h"
 
 int establishConnection();
@@ -15,28 +5,33 @@ void analyzeCalls(char *req, int fd);
 void listAll(int fd);
 int bindSocket(int sock);
 int read_func(char *req, int fd);
-size_t stat_func(char *fileName);
+size_t get_size(char *fileName);
 
 int main(){
     int sock = establishConnection();
     if(sock == -1) errNClose("sock",sock);
 
-    int client_fd = accept(sock, NULL, NULL);
-    if(client_fd == -1){
-        errNClose("accpet",client_fd);
-        closeFd(sock);
+    int clientFd = accept(sock, NULL, NULL);
+    if(clientFd == -1){
+        errNClose("accpet",clientFd);
+        close(sock);
     }
 
-    // extracting the headder of the protocol (res)
-    char *buffer = getMsg(client_fd);
+    // all good before this
+
+    // getting the request
+    uint32_t size;
+    char *buffer = get_msg(clientFd,&size);
     if (buffer == NULL) return -1;
-    
     printf("%s\n",buffer);
-    analyzeCalls(buffer,client_fd);
+
+    // passing the request further
+    analyzeCalls(buffer,clientFd);
+    
 
     free(buffer); 
-    closeFd(sock);
-    closeFd(client_fd);
+    close(sock);
+    close(clientFd);
     return 0;
 }
 
@@ -46,41 +41,34 @@ void analyzeCalls(char *req,int fd){
 
     if(strcmp(listCall,req) == 0){
         listAll(fd);
-    }else if(strncmp(opendDirCall,req,4) == 0){
+    }else if(strncmp(opendDirCall,req,3) == 0){
         int n = read_func(req,fd);
         if(n==-1) return;
     }
 }
 
-size_t stat_func(char *fileName){
+size_t get_size(char *fileName){
     struct stat info; // Stat structure using it as info
-    size_t size;
+    size_t size = -1;
+
 	int n = stat(fileName,&info);
 	if(n == 0){
         size = info.st_size;
-		if (S_ISDIR(info.st_mode)){
-			printf("for the directory named :%s, stat is %ld\n", fileName,size);
-		}else if (S_ISREG(info.st_mode)){
-            size = info.st_size;
-			printf("for the file named :%s, stat is %ld\n", fileName,info.st_size);
-		}
-        return size;
 	}
 
-    return -1;
+    return size;
 }
 
 int read_func(char *req, int fd){
     char *fileName = req + 4;
-    printf("%s\n", fileName);
     
-    size_t size = stat_func(fileName);
+    size_t size = get_size(fileName);
     if(size == -1) return -1;
 
     char *ch = malloc(size);
 	int fileFd = open(fileName, O_RDONLY);
     if (fileFd == -1) return -1;
-    
+
     int n = read(fileFd,ch,size);
 
     if (n<=0) return -1;
@@ -101,7 +89,7 @@ void listAll(int fd){
 	}
 
     uint32_t toalFiles = htonl(count);
-    sendHelper(fd,&toalFiles,sizeof(toalFiles));
+    sendRecursively(fd,&toalFiles,sizeof(toalFiles));
 
     closedir(dir);
     dir = opendir(".");

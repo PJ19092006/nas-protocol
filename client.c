@@ -1,12 +1,3 @@
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h> // std lib
-#include <sys/socket.h>  // socket lib
-#include <stdio.h>  // std input
-#include <string.h>
-#include <stdlib.h>
-#include <fcntl.h>
-
 #include "common.h"
 
 int connectServer(int sock);
@@ -20,19 +11,27 @@ int main(){
     int connectRes = connectServer(sock);
     if (connectRes == -1) errNClose("connect", sock);
 
-    // send the msg to server
-    char msg[] = "GET new.txt";
+    // taking msg from client
+    char msg[100];
+    fgets(msg,100,stdin);
+    msg[strcspn(msg, "\n")] = '\0';
+
     int bytes = send_msg(sock, msg, strlen(msg));
     if (bytes == -1)errNClose("read",sock);
 
+    // all good above this
+
     // listning for dir (response)
-    char *file = getMsg(sock);
-	int fileFd = open("textRecv.txt", O_WRONLY | O_CREAT | O_TRUNC,O_CREAT);
+    uint32_t size;
+    char *file = get_msg(sock,&size);
+	int fileFd = open("newImg.jpeg", O_WRONLY | O_CREAT | O_TRUNC,0644);
     if (file == NULL) errNClose("read",sock);
-    int n = write(fileFd,file,strlen(file));
+
+    int n = write(fileFd,file,size);
+
     close(fileFd);
     free(file);
-    closeFd(sock);
+    close(sock);
     return 0;
 }
 

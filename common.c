@@ -1,23 +1,10 @@
 #include "common.h"
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <stdint.h>
-#include <sys/socket.h> 
-#include <string.h>
-
 
 void errNClose(const char *msg,int fd){
-    closeFd(fd);
+    close(fd);
     perror(msg);
     exit(EXIT_FAILURE);
-}
-
-void closeFd(int fd){
-    close(fd);
 }
 
 int createSocket(){
@@ -30,8 +17,31 @@ int createSocket(){
     return sock;  
 }
 
-// just becuase the TCP will not transfer the whole file at once (so a loop to keep track of that)
-int sendHelper(int sock, const void *buffer, uint32_t length){
+uint32_t getHeader(int client_fd){
+    uint32_t netLength ;
+    int res = recvHelper(client_fd,&netLength,sizeof(netLength));
+    if (res == -1) return UINT32_MAX;
+    uint32_t length = ntohl(netLength);
+
+    return length;
+}
+
+//  sending helper methods
+int send_msg (int fd , const void *buffer, uint32_t length){
+    uint32_t lenghtMsg = htonl(length);
+
+    // sending just the length (headder)
+    int lengthBytes = sendRecursively(fd,&lenghtMsg,sizeof(lenghtMsg));
+    if (lengthBytes == -1) return -1;
+
+    // sending the msg (body)
+    int msgBytes = sendRecursively(fd, buffer, length);
+    if (msgBytes == -1) return -1;
+
+    return lengthBytes + msgBytes;
+}
+
+int sendRecursively(int sock, const void *buffer, uint32_t length){
     const char *ptr = buffer;
     size_t remaining = length;
 
@@ -45,32 +55,25 @@ int sendHelper(int sock, const void *buffer, uint32_t length){
     return length;
 }
 
-int send_msg (int fd , const void *buffer, uint32_t length){
-    uint32_t lenghtMsg = htonl(length);
+// all good above this
 
-    // sending just the length (headder)
-    int lengthBytes = sendHelper(fd,&lenghtMsg,sizeof(lenghtMsg));
-    if (lengthBytes == -1) return -1;
-
-    // sending the msg (body)
-    int msgBytes = sendHelper(fd, buffer, length);
-    if (msgBytes == -1) return -1;
-
-    return lengthBytes + msgBytes;
-}
-
-char *getMsg(int fd){
+// get string methods
+char *get_msg(int fd, uint32_t *length){
     // extracting headder (length)
-    uint32_t headder = getHeadder(fd);
-    if(headder > 1000) return NULL; // overlimit memory call
+    *length  = getHeader(fd);
+    // if(*length > 1000) return NULL; // overlimit memory call
 
     // alocating memory
     char *buffer;
-    buffer = (char *) malloc(headder + 1);
+    buffer = (char *) malloc((*length) + 1);
     if(buffer == NULL) return NULL;
 
     // recive the msg
-    int bytes = recvHelper(fd,buffer,headder);
+    int bytes = recvHelper(fd,buffer,(*length));
+    if(bytes == -1){
+        free(buffer);
+        return NULL;
+    }
 
     buffer[bytes] = '\0';
 
@@ -78,10 +81,11 @@ char *getMsg(int fd){
 }
 
 int getFiles(int fd){
-    uint32_t totalFiles = getHeadder(fd);
+    uint32_t totalFiles = getHeader(fd);
+    uint32_t size;
 
     while(totalFiles>0){
-        char *store = getMsg(fd);
+        char *store = get_msg(fd,&size);
         if(store == NULL) return -1;
 
         printf("%s\n",store);
@@ -103,13 +107,4 @@ int recvHelper(int fd, void *buffer, size_t length){
         ptr += recivedBytes;
     }
     return bytes;
-}
-
-uint32_t getHeadder(int client_fd){
-    uint32_t netLength ;
-    int res = recvHelper(client_fd,&netLength,sizeof(netLength));
-    if (res == -1) return UINT32_MAX;
-    uint32_t length = ntohl(netLength);
-
-    return length;
 }
