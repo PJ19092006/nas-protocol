@@ -5,6 +5,8 @@
 #include <stdio.h>  // std input
 #include <string.h>
 #include <stdlib.h>
+#include <fcntl.h>
+
 #include "common.h"
 
 int connectServer(int sock);
@@ -19,16 +21,17 @@ int main(){
     if (connectRes == -1) errNClose("connect", sock);
 
     // send the msg to server
-    char msg[] = "LIST";
+    char msg[] = "GET new.txt";
     int bytes = send_msg(sock, msg, strlen(msg));
     if (bytes == -1)errNClose("read",sock);
 
-    char end[] = "end"; // declaring to check if file dir ended (this is for now only, to be changed)
-
     // listning for dir (response)
-    int x = getFiles(sock);
-    if (x == -1) errNClose("read",sock);
-
+    char *file = getMsg(sock);
+	int fileFd = open("textRecv.txt", O_WRONLY | O_CREAT | O_TRUNC,O_CREAT);
+    if (file == NULL) errNClose("read",sock);
+    int n = write(fileFd,file,strlen(file));
+    close(fileFd);
+    free(file);
     closeFd(sock);
     return 0;
 }
