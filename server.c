@@ -4,6 +4,11 @@ int establishConnection();
 void analyzeCalls(char *req, int fd); 
 void listAll(int fd);
 int bindSocket(int sock);
+int delete_func(char *fileName);
+int change_dir(const char *dirname);
+int create_dir(char *fileName);
+int remove_dir(char *dirName);
+char getWorking_dir();
 
 int main(){
     int sock = establishConnection();
@@ -35,7 +40,10 @@ void analyzeCalls(char *req,int fd){
     char listCall[] = "LIST";
     char opendDirCall[] = "GET";
     char addDirCall[] = "PUT";
-    char *fileName = req + 4;
+    char deleteCall[] = "DELETE";
+    char newDirCall[] = "MKDIR";
+
+    char *fileName = getArgument(req);
 
     if(strcmp(listCall,req) == 0){
         listAll(fd);
@@ -46,7 +54,38 @@ void analyzeCalls(char *req,int fd){
         printf("what name of the file you want: ");
         char newFileName[] = "newFile.jpeg" ;
         int n = get_fileData(fd,newFileName);
+    }else if(strncmp(req,deleteCall,5) == 0){
+        int n = delete_func(fileName);
+    }else if(strncmp(req,newDirCall,5) == 0){
+        int n = create_dir(fileName);
     }
+}
+
+// the new functions are being added up here
+int create_dir(char *dirName){
+    int n = mkdir(dirName,0755);
+    return n;
+}
+
+int remove_dir(char *dirName){
+    int n = rmdir(dirName);
+    return n;
+}
+
+int change_dir(const char *dirName){
+    int n = chdir(dirName);
+    return n ;
+}
+
+char getWorking_dir(){
+    char *dirName; 
+    int n = getcwd(dirName,100);
+    return dirName;
+}
+
+int delete_func(char *fileName){
+    int bytes = remove(fileName);
+    return bytes;
 }
 
 void listAll(int fd){

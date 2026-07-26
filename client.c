@@ -29,17 +29,17 @@ void listenCalls(char *req, int fd){
     char listCall[] = "LIST";
     char opendDirCall[] = "GET";
     char addDirCall[] = "PUT";
-    char *fileName = req + 4;
+    char *fileName = getArgument(req);
 
     if(strcmp(listCall,req) == 0){
         int totalBytes = getFiles(fd);
         if(totalBytes == -1) return;
     }else if(strncmp(opendDirCall,req,3) == 0){ // GET call 
         printf("what name of the file you want: ");
-        char fileName[100];
-        fgets(fileName,100,stdin);
-        fileName[strcspn(fileName, "\n")] = '\0'; 
-        int fileBytesRecv = get_fileData(fd,fileName);
+        char newFileName[100];
+        fgets(newFileName,100,stdin);
+        newFileName[strcspn(newFileName, "\n")] = '\0'; 
+        int fileBytesRecv = get_fileData(fd,newFileName);
         if(fileBytesRecv == -1) errNClose("transfer",fd);
     }else if(strncmp(addDirCall,req,3) == 0){ // PUT call
         int n = read_func(fd,fileName);
