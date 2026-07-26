@@ -4,8 +4,6 @@ int establishConnection();
 void analyzeCalls(char *req, int fd); 
 void listAll(int fd);
 int bindSocket(int sock);
-int read_func(char *req, int fd);
-size_t get_size(char *fileName);
 
 int main(){
     int sock = establishConnection();
@@ -16,8 +14,6 @@ int main(){
         errNClose("accpet",clientFd);
         close(sock);
     }
-
-    // all good before this
 
     // getting the request
     uint32_t size;
@@ -38,45 +34,19 @@ int main(){
 void analyzeCalls(char *req,int fd){
     char listCall[] = "LIST";
     char opendDirCall[] = "GET";
+    char addDirCall[] = "PUT";
+    char *fileName = req + 4;
 
     if(strcmp(listCall,req) == 0){
         listAll(fd);
     }else if(strncmp(opendDirCall,req,3) == 0){
-        int n = read_func(req,fd);
+        int n = read_func(fd,fileName);
         if(n==-1) return;
+    }else if(strncmp(addDirCall,req,3) == 0){
+        printf("what name of the file you want: ");
+        char newFileName[] = "newFile.jpeg" ;
+        int n = get_fileData(fd,newFileName);
     }
-}
-
-size_t get_size(char *fileName){
-    struct stat info; // Stat structure using it as info
-    size_t size = -1;
-
-	int n = stat(fileName,&info);
-	if(n == 0){
-        size = info.st_size;
-	}
-
-    return size;
-}
-
-int read_func(char *req, int fd){
-    char *fileName = req + 4;
-    
-    size_t size = get_size(fileName);
-    if(size == -1) return -1;
-
-    char *ch = malloc(size);
-	int fileFd = open(fileName, O_RDONLY);
-    if (fileFd == -1) return -1;
-
-    int n = read(fileFd,ch,size);
-
-    if (n<=0) return -1;
-    int bytes = send_msg(fd,ch,n);
-
-    close(fileFd);
-    free(ch);
-    return bytes;
 }
 
 void listAll(int fd){

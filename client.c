@@ -1,5 +1,6 @@
 #include "common.h"
 
+void listenCalls(char *req, int fd);
 int connectServer(int sock);
 
 int main(){
@@ -18,23 +19,32 @@ int main(){
 
     int bytes = send_msg(sock, msg, strlen(msg));
     if (bytes == -1)errNClose("read",sock);
+    listenCalls(msg,sock);
 
-    // all good above this
-
-    // listning for dir (response)
-    uint32_t size;
-    char *file = get_msg(sock,&size);
-	int fileFd = open("newImg.jpeg", O_WRONLY | O_CREAT | O_TRUNC,0644);
-    if (file == NULL) errNClose("read",sock);
-
-    int n = write(fileFd,file,size);
-
-    close(fileFd);
-    free(file);
     close(sock);
     return 0;
 }
 
+void listenCalls(char *req, int fd){
+    char listCall[] = "LIST";
+    char opendDirCall[] = "GET";
+    char addDirCall[] = "PUT";
+    char *fileName = req + 4;
+
+    if(strcmp(listCall,req) == 0){
+        int totalBytes = getFiles(fd);
+        if(totalBytes == -1) return;
+    }else if(strncmp(opendDirCall,req,3) == 0){ // GET call 
+        printf("what name of the file you want: ");
+        char fileName[100];
+        fgets(fileName,100,stdin);
+        fileName[strcspn(fileName, "\n")] = '\0'; 
+        int fileBytesRecv = get_fileData(fd,fileName);
+        if(fileBytesRecv == -1) errNClose("transfer",fd);
+    }else if(strncmp(addDirCall,req,3) == 0){ // PUT call
+        int n = read_func(fd,fileName);
+    }
+}
 
 int connectServer(int sock){
     struct sockaddr_in server = {0};

@@ -26,5 +26,9 @@ int recvHelper(int fd, void *buffer, size_t length);
 char *get_msg(int client_fd, uint32_t *length);
 uint32_t getHeader(int client_fd);
 int getFiles(int fd);
+int get_fileData(int sock,char fileName[]);
+int read_func(int fd,char *fileName);
+size_t get_size(char *fileName);
+char *getArgument(char *req);
 
 #endif

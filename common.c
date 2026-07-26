@@ -108,3 +108,66 @@ int recvHelper(int fd, void *buffer, size_t length){
     }
     return bytes;
 }
+
+
+int get_fileData(int sock, char fileName[]){
+    uint32_t size;
+    char *file = get_msg(sock,&size);
+
+	int fileFd = open(fileName, O_WRONLY | O_CREAT | O_TRUNC,0644);
+    if (file == NULL){
+        close(fileFd);
+        free(file);
+        return -1;
+    }
+
+    int n = write(fileFd,file,size);
+    close(fileFd);
+    free(file);
+
+    return n;
+}
+
+int read_func(int fd,char *fileName){
+
+    size_t size = get_size(fileName);
+    if(size == -1) return -1;
+
+    char *ch = malloc(size);
+	int fileFd = open(fileName, O_RDONLY);
+    if (fileFd == -1) return -1;
+
+    int n = read(fileFd,ch,size);
+
+    if (n<=0) return -1;
+    int bytes = send_msg(fd,ch,n);
+
+    close(fileFd);
+    free(ch);
+    return bytes;
+}
+
+size_t get_size(char *fileName){
+    struct stat info; // Stat structure using it as info
+    size_t size = -1;
+
+	int n = stat(fileName,&info);
+	if(n == 0){
+        size = info.st_size;
+	}
+
+    return size;
+}
+
+char *getArgument(char *req){
+    char *space = " ";
+    int index;
+    for(int i = 0; i<strlen(req);i++){
+        if(strcmp(req[i],space)==0){
+            index = i;
+        }
+    }
+
+    char *argument = req + index;
+    return argument; 
+}
