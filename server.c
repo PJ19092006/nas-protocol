@@ -15,22 +15,19 @@ int main(){
     if(sock == -1) errNClose("sock",sock);
 
     int clientFd = accept(sock, NULL, NULL);
-    if(clientFd == -1){
+    if(clientFd != -1){
+
+        uint32_t size;
+        char *buffer = get_msg(clientFd,&size);
+        if (buffer == NULL) return -1;
+        printf("%s\n",buffer);
+        analyzeCalls(buffer,clientFd);
+        free(buffer); 
+    }else{
         errNClose("accpet",clientFd);
         close(sock);
     }
 
-    // getting the request
-    uint32_t size;
-    char *buffer = get_msg(clientFd,&size);
-    if (buffer == NULL) return -1;
-    printf("%s\n",buffer);
-
-    // passing the request further
-    analyzeCalls(buffer,clientFd);
-    
-
-    free(buffer); 
     close(sock);
     close(clientFd);
     return 0;
@@ -42,6 +39,7 @@ void analyzeCalls(char *req,int fd){
     char addDirCall[] = "PUT";
     char deleteCall[] = "DELETE";
     char newDirCall[] = "MKDIR";
+    char exitCall[] = "EXIT";
 
     char *fileName = getArgument(req);
 
@@ -58,6 +56,8 @@ void analyzeCalls(char *req,int fd){
         int n = delete_func(fileName);
     }else if(strncmp(req,newDirCall,5) == 0){
         int n = create_dir(fileName);
+    }else if (strcmp(req,exitCall) == 0){
+        return;
     }
 }
 
