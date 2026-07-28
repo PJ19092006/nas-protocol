@@ -1,64 +1,83 @@
 #include "common.h"
 
 int establishConnection();
-void analyzeCalls(char *req, int fd); 
-void listAll(int fd);
+int analyzeCalls(char *req, int fd); 
+int listAll(int fd);
 int bindSocket(int sock);
 int delete_func(char *fileName);
 int change_dir(const char *dirname);
 int create_dir(char *fileName);
 int remove_dir(char *dirName);
-char getWorking_dir();
+int getWorking_dir(int fd);
 
 int main(){
     int sock = establishConnection();
-    if(sock == -1) errNClose("sock",sock);
+    if (sock == -1)errNClose("socket", sock);
 
-    int clientFd = accept(sock, NULL, NULL);
-    if(clientFd != -1){
+    while (1){
+        int clientFd = accept(sock, NULL, NULL);
 
-        uint32_t size;
-        char *buffer = get_msg(clientFd,&size);
-        if (buffer == NULL) return -1;
-        printf("%s\n",buffer);
-        analyzeCalls(buffer,clientFd);
-        free(buffer); 
-    }else{
-        errNClose("accpet",clientFd);
-        close(sock);
+        if (clientFd == -1){
+            perror("accept");
+            continue;
+        }
+
+        while (1){
+            uint32_t size;
+            char *buffer = get_msg(clientFd, &size);
+
+            if (buffer == NULL)
+                break;
+
+            printf("%s\n", buffer);
+
+            int res = analyzeCalls(buffer, clientFd);
+
+            free(buffer);
+
+            if (res == -1)break;
+        }
+
+        close(clientFd);
     }
 
     close(sock);
-    close(clientFd);
     return 0;
 }
 
-void analyzeCalls(char *req,int fd){
+int analyzeCalls(char *req,int fd){
     char listCall[] = "LIST";
     char opendDirCall[] = "GET";
     char addDirCall[] = "PUT";
     char deleteCall[] = "DELETE";
     char newDirCall[] = "MKDIR";
     char exitCall[] = "EXIT";
+    char currDir[] = "PWD";
+
 
     char *fileName = getArgument(req);
+    int bytes=-1;
 
     if(strcmp(listCall,req) == 0){
-        listAll(fd);
+        bytes = listAll(fd);
     }else if(strncmp(opendDirCall,req,3) == 0){
-        int n = read_func(fd,fileName);
-        if(n==-1) return;
+        bytes = read_func(fd,fileName);
     }else if(strncmp(addDirCall,req,3) == 0){
         printf("what name of the file you want: ");
         char newFileName[] = "newFile.jpeg" ;
-        int n = get_fileData(fd,newFileName);
-    }else if(strncmp(req,deleteCall,5) == 0){
-        int n = delete_func(fileName);
+        bytes = get_fileData(fd,newFileName);
+    }else if(strncmp(req,deleteCall,6) == 0){
+        bytes = delete_func(fileName);
     }else if(strncmp(req,newDirCall,5) == 0){
-        int n = create_dir(fileName);
-    }else if (strcmp(req,exitCall) == 0){
-        return;
+        bytes = create_dir(fileName);
+    }else if(strcmp(req,exitCall) == 0){
+        return -1;
+    }else if(strcmp(req,currDir) == 0){
+        bytes = getWorking_dir(fd); 
     }
+
+    if(bytes == -1) return -1;
+    return bytes;
 }
 
 // the new functions are being added up here
@@ -76,11 +95,14 @@ int change_dir(const char *dirName){
     int n = chdir(dirName);
     return n ;
 }
+int getWorking_dir(int fd){
+    char *dirName = getcwd(NULL, 0);
+    if (dirName == NULL)return -1;
 
-char getWorking_dir(){
-    char *dirName; 
-    int n = getcwd(dirName,100);
-    return dirName;
+    int bytes = send_msg(fd, dirName, strlen(dirName));
+    free(dirName);
+
+    return bytes;
 }
 
 int delete_func(char *fileName){
@@ -88,8 +110,9 @@ int delete_func(char *fileName){
     return bytes;
 }
 
-void listAll(int fd){
+int listAll(int fd){
     DIR *dir = opendir("."); // opening the dir and using pointer to point at it
+    if(dir == NULL) return -1;
     struct dirent *entry; // pointer pointing to dirent structure
     int count = 0;
 
@@ -97,20 +120,23 @@ void listAll(int fd){
         count ++;
 	}
 
-    uint32_t toalFiles = htonl(count);
-    sendRecursively(fd,&toalFiles,sizeof(toalFiles));
+    uint32_t totalFiles = htonl(count);
+    sendRecursively(fd,&totalFiles,sizeof(totalFiles));
 
     closedir(dir);
     dir = opendir(".");
-
+    if(dir == NULL) return -1;
+    int totalBytes = 0;
     for(int i = 0; i<count; i++){
         entry = readdir(dir);
         char *file = entry->d_name;
         int bytes = send_msg(fd,file,strlen(file));
-        if(bytes == -1) return;
+        if(bytes == -1) return -1;
+        totalBytes += bytes;
     }
 
     closedir(dir);
+    return totalBytes;
 }
 
 

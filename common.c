@@ -28,10 +28,10 @@ uint32_t getHeader(int client_fd){
 
 //  sending helper methods
 int send_msg (int fd , const void *buffer, uint32_t length){
-    uint32_t lenghtMsg = htonl(length);
+    uint32_t lengthMsg = htonl(length);
 
     // sending just the length (headder)
-    int lengthBytes = sendRecursively(fd,&lenghtMsg,sizeof(lenghtMsg));
+    int lengthBytes = sendRecursively(fd,&lengthMsg,sizeof(lengthMsg));
     if (lengthBytes == -1) return -1;
 
     // sending the msg (body)
@@ -92,6 +92,8 @@ int getFiles(int fd){
         totalFiles--;
         free(store);
     }
+
+    return 0;
 }
 
 int recvHelper(int fd, void *buffer, size_t length){
@@ -113,10 +115,10 @@ int recvHelper(int fd, void *buffer, size_t length){
 int get_fileData(int sock, char fileName[]){
     uint32_t size;
     char *file = get_msg(sock,&size);
+    if(file == NULL) return -1;
 
 	int fileFd = open(fileName, O_WRONLY | O_CREAT | O_TRUNC,0644);
-    if (file == NULL){
-        close(fileFd);
+    if (fileFd == -1){
         free(file);
         return -1;
     }
@@ -133,13 +135,23 @@ int read_func(int fd,char *fileName){
     size_t size = get_size(fileName);
     if(size == -1) return -1;
 
-    char *ch = malloc(size);
 	int fileFd = open(fileName, O_RDONLY);
     if (fileFd == -1) return -1;
+    
+    char *ch = malloc(size);
+    if(ch ==NULL){
+        close(fileFd);
+        return -1;
+    }
 
     int n = read(fileFd,ch,size);
 
-    if (n<=0) return -1;
+    if (n<=0){
+        close(fileFd);
+        free(ch);
+        return -1;
+    }
+
     int bytes = send_msg(fd,ch,n);
 
     close(fileFd);
@@ -160,14 +172,9 @@ size_t get_size(char *fileName){
 }
 
 char *getArgument(char *req){
-    char *space = " ";
-    int index;
-    for(int i = 0; i<strlen(req);i++){
-        if(strcmp(req[i],space)==0){
-            index = i;
-        }
-    }
+    char *space = strchr(req, ' ');
 
-    char *argument = req + index;
-    return argument; 
+    if (space == NULL)return NULL;
+
+    return space + 1;
 }

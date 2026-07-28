@@ -11,14 +11,14 @@ int main(){
 
     if (connectRes != -1){
         while (1){
-            char msg[100];
-            fgets(msg,100,stdin);
+            char msg[BUFFER_SIZE];
+            fgets(msg,BUFFER_SIZE,stdin);
             msg[strcspn(msg, "\n")] = '\0';
             
             int bytes = send_msg(sock, msg, strlen(msg));
             if (bytes == -1)errNClose("read",sock);
             int res = listenCalls(msg,sock);
-            if(res == -1) return;
+            if(res == -1) return -1;
         }
         
     }else{
@@ -39,7 +39,7 @@ int listenCalls(char *req, int fd){
 
     if(strcmp(listCall,req) == 0){
         bytes = getFiles(fd);
-        if(bytes == -1) return;
+        if(bytes == -1) return -1;
     }else if(strncmp(opendDirCall,req,3) == 0){ // GET call 
         printf("what name of the file you want: ");
         char newFileName[100];
@@ -50,8 +50,14 @@ int listenCalls(char *req, int fd){
     }else if(strncmp(addDirCall,req,3) == 0){ // PUT call
         bytes = read_func(fd,fileName);
     }else if(strcmp(req,exitCall) == 0){
-        return;
-    }
+        return -1;
+    }else if(strcmp(req, "PWD") == 0){
+        uint32_t size;
+        char *path = get_msg(fd, &size);
+        if(path == NULL) return -1;
+        printf("%s\n", path);
+        free(path);
+}
 
     return bytes;
 }
@@ -59,7 +65,7 @@ int listenCalls(char *req, int fd){
 int connectServer(int sock){
     struct sockaddr_in server = {0};
     server.sin_family = AF_INET;
-    server.sin_port = htons(5000);
+    server.sin_port = htons(PORT);
     server.sin_addr.s_addr = inet_addr("127.0.0.1"); // addr of client
 
     int connectRes = connect(sock,(struct sockaddr *)&server,sizeof(server));
