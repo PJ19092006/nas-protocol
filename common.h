@@ -17,6 +17,15 @@
 #define PORT 5000
 #define BUFFER_SIZE 1024
 
+typedef enum{
+    STATUS_OK = 0,
+    STATUS_ERROR
+} Status;
+
+typedef struct{
+    Status status;
+} Response;
+
 void errNClose(const char *msg,int fd);
 int createSocket();
 // the new added func to common

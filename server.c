@@ -4,10 +4,10 @@ int establishConnection();
 int analyzeCalls(char *req, int fd); 
 int listAll(int fd);
 int bindSocket(int sock);
-int delete_func(char *fileName);
-int change_dir(const char *dirname);
-int create_dir(char *fileName);
-int remove_dir(char *dirName);
+int delete_func(char *fileName,int fd);
+int change_dir(const char *dirname,int fd);
+int create_dir(char *fileName,int fd);
+int remove_dir(char *dirName,int fd);
 int getWorking_dir(int fd);
 
 int main(){
@@ -52,7 +52,9 @@ int analyzeCalls(char *req,int fd){
     char deleteCall[] = "DELETE";
     char newDirCall[] = "MKDIR";
     char exitCall[] = "EXIT";
-    char currDir[] = "PWD";
+    char currDirCall[] = "PWD";
+    char changeDirCall[] = "CD";
+    char deleteDirCall[] = "RMDIR";
 
 
     char *fileName = getArgument(req);
@@ -61,19 +63,27 @@ int analyzeCalls(char *req,int fd){
     if(strcmp(listCall,req) == 0){
         bytes = listAll(fd);
     }else if(strncmp(opendDirCall,req,3) == 0){
+        if(fileName == NULL)return -1;
         bytes = read_func(fd,fileName);
     }else if(strncmp(addDirCall,req,3) == 0){
-        printf("what name of the file you want: ");
         char newFileName[] = "newFile.jpeg" ;
         bytes = get_fileData(fd,newFileName);
     }else if(strncmp(req,deleteCall,6) == 0){
-        bytes = delete_func(fileName);
+        if(fileName == NULL)return -1;
+        bytes = delete_func(fileName,fd);
     }else if(strncmp(req,newDirCall,5) == 0){
-        bytes = create_dir(fileName);
+        if(fileName == NULL)return -1;
+        bytes = create_dir(fileName,fd);
     }else if(strcmp(req,exitCall) == 0){
         return -1;
-    }else if(strcmp(req,currDir) == 0){
+    }else if(strcmp(req,currDirCall) == 0){
         bytes = getWorking_dir(fd); 
+    }else if(strncmp(req,changeDirCall,2)==0){
+        if(fileName == NULL)return -1;
+        bytes = change_dir(fileName,fd);
+    }else if(strncmp(req,deleteDirCall,5) == 0){
+        if(fileName == NULL)return -1;
+        bytes = remove_dir(fileName,fd);
     }
 
     if(bytes == -1) return -1;
@@ -81,23 +91,39 @@ int analyzeCalls(char *req,int fd){
 }
 
 // the new functions are being added up here
-int create_dir(char *dirName){
-    int n = mkdir(dirName,0755);
-    return n;
+int create_dir(char *dirName,int fd){
+    Response res;
+    int bytes = mkdir(dirName,0755);
+
+    if(bytes == 0)res.status = STATUS_OK;
+    else res.status = STATUS_ERROR;
+    sendRecursively(fd, &res, sizeof(res));
+    return bytes;
 }
 
-int remove_dir(char *dirName){
-    int n = rmdir(dirName);
-    return n;
+int remove_dir(char *dirName,int fd){
+    Response res;
+    int bytes = rmdir(dirName);
+
+    if(bytes == 0)res.status = STATUS_OK;
+    else res.status = STATUS_ERROR;
+    sendRecursively(fd, &res, sizeof(res));
+
+    return bytes;
 }
 
-int change_dir(const char *dirName){
-    int n = chdir(dirName);
-    return n ;
-}
 int getWorking_dir(int fd){
+    Response res;
     char *dirName = getcwd(NULL, 0);
-    if (dirName == NULL)return -1;
+    
+    if(dirName == NULL){
+        res.status = STATUS_ERROR;
+        sendRecursively(fd, &res, sizeof(res));
+        return -1;
+    }
+
+    res.status = STATUS_OK;
+    sendRecursively(fd, &res, sizeof(res));
 
     int bytes = send_msg(fd, dirName, strlen(dirName));
     free(dirName);
@@ -105,8 +131,34 @@ int getWorking_dir(int fd){
     return bytes;
 }
 
-int delete_func(char *fileName){
+int change_dir(const char *dirName, int fd){
+    Response res;
+    int bytes = chdir(dirName);
+    char *path = getcwd(NULL,0);
+
+    if(bytes == -1 || path == NULL){
+        res.status = STATUS_ERROR;
+        sendRecursively(fd, &res, sizeof(res));
+        return -1;
+    }
+
+    res.status = STATUS_OK;
+    sendRecursively(fd, &res, sizeof(res));
+
+    send_msg(fd,path,strlen(path));
+    free(path);
+
+    return 0;
+}
+
+int delete_func(char *fileName,int fd){
+    Response res;
     int bytes = remove(fileName);
+
+    if(bytes == 0)res.status = STATUS_OK;
+    else res.status = STATUS_ERROR;
+    sendRecursively(fd, &res, sizeof(res));
+
     return bytes;
 }
 
@@ -124,6 +176,7 @@ int listAll(int fd){
     sendRecursively(fd,&totalFiles,sizeof(totalFiles));
 
     closedir(dir);
+
     dir = opendir(".");
     if(dir == NULL) return -1;
     int totalBytes = 0;
@@ -131,7 +184,10 @@ int listAll(int fd){
         entry = readdir(dir);
         char *file = entry->d_name;
         int bytes = send_msg(fd,file,strlen(file));
-        if(bytes == -1) return -1;
+        if(bytes == -1){
+            closedir(dir);
+            return -1;
+        }
         totalBytes += bytes;
     }
 
