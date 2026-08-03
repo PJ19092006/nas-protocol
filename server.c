@@ -1,4 +1,6 @@
 #include "common.h"
+#include <signal.h>
+#include <sys/wait.h>
 
 int establishConnection();
 int analyzeCalls(char *req, int fd); 
@@ -10,34 +12,48 @@ int create_dir(char *fileName,int fd);
 int remove_dir(char *dirName,int fd);
 int getWorking_dir(int fd);
 void sendStatus(int bytes, int fd);
+void handle_child(int sig);
 
 int main(){
+    signal(SIGCHLD, handle_child);
     int sock = establishConnection();
     if (sock == -1)errNClose("socket", sock);
 
     while (1){
         int clientFd = accept(sock, NULL, NULL);
-
         if (clientFd == -1){
             perror("accept");
             continue;
         }
 
-        while (1){
-            char *buffer = get_msg(clientFd);
+        pid_t pid = fork();
 
-            if (buffer == NULL)
-                break;
-
-            printf("%s\n", buffer);
-
-            int res = analyzeCalls(buffer, clientFd);
-
-            free(buffer);
-
-            if (res == -1)break;
+        if(pid < 0){
+            perror("fork");
+            close(clientFd);
+            continue;
         }
 
+        if(pid == 0){ 
+            close(sock);
+            while (1){
+                char *buffer = get_msg(clientFd);
+    
+                if (buffer == NULL)
+                    break;
+    
+                printf("%s\n", buffer);
+    
+                int res = analyzeCalls(buffer, clientFd);
+    
+                free(buffer);
+    
+                if (res == -1)break;
+            }
+    
+            close(clientFd);
+            exit(0);
+        }
         close(clientFd);
     }
 
@@ -146,7 +162,6 @@ void sendStatus(int bytes, int fd){
 }
 
 int listAll(int fd){
-    Response res;
 
     DIR *dir = opendir(".");
     if(dir == NULL) return -1;
@@ -209,4 +224,8 @@ int establishConnection(){
     int listenRes = listen(sock,5);
     if (listenRes == -1) errNClose("listen",sock);
     return sock;
+}
+
+void handle_child(int sig){
+    while (waitpid(-1, NULL, WNOHANG) > 0);
 }
