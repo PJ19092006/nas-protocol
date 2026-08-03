@@ -9,6 +9,7 @@ int change_dir(const char *dirname,int fd);
 int create_dir(char *fileName,int fd);
 int remove_dir(char *dirName,int fd);
 int getWorking_dir(int fd);
+void sendStatus(int bytes, int fd);
 
 int main(){
     int sock = establishConnection();
@@ -23,8 +24,7 @@ int main(){
         }
 
         while (1){
-            uint32_t size;
-            char *buffer = get_msg(clientFd, &size);
+            char *buffer = get_msg(clientFd);
 
             if (buffer == NULL)
                 break;
@@ -46,42 +46,32 @@ int main(){
 }
 
 int analyzeCalls(char *req,int fd){
-    char listCall[] = "LIST";
-    char opendDirCall[] = "GET";
-    char addDirCall[] = "PUT";
-    char deleteCall[] = "DELETE";
-    char newDirCall[] = "MKDIR";
-    char exitCall[] = "EXIT";
-    char currDirCall[] = "PWD";
-    char changeDirCall[] = "CD";
-    char deleteDirCall[] = "RMDIR";
-
-
     char *fileName = getArgument(req);
     int bytes=-1;
 
-    if(strcmp(listCall,req) == 0){
+    if(strcmp(LIST_ALL,req) == 0){
         bytes = listAll(fd);
-    }else if(strncmp(opendDirCall,req,3) == 0){
+    }else if(strncmp(GET_CALL,req,3) == 0){
         if(fileName == NULL)return -1;
-        bytes = read_func(fd,fileName);
-    }else if(strncmp(addDirCall,req,3) == 0){
-        char newFileName[] = "newFile.jpeg" ;
+        bytes = send_file(fd,fileName);
+    }else if(strncmp(PUT_CALL,req,3) == 0){
+        char *newFileName = get_msg(fd);
         bytes = get_fileData(fd,newFileName);
-    }else if(strncmp(req,deleteCall,6) == 0){
+        free(newFileName);
+    }else if(strncmp(DELETE_FILE,req,6) == 0){
         if(fileName == NULL)return -1;
         bytes = delete_func(fileName,fd);
-    }else if(strncmp(req,newDirCall,5) == 0){
+    }else if(strncmp(CREATE_DIR,req,5) == 0){
         if(fileName == NULL)return -1;
         bytes = create_dir(fileName,fd);
-    }else if(strcmp(req,exitCall) == 0){
+    }else if(strcmp(EXIT,req) == 0){
         return -1;
-    }else if(strcmp(req,currDirCall) == 0){
+    }else if(strcmp(PRINT_DIR,req) == 0){
         bytes = getWorking_dir(fd); 
-    }else if(strncmp(req,changeDirCall,2)==0){
+    }else if(strncmp(CHANGE_DIR,req,2)==0){
         if(fileName == NULL)return -1;
         bytes = change_dir(fileName,fd);
-    }else if(strncmp(req,deleteDirCall,5) == 0){
+    }else if(strncmp(DELETE_DIR,req,5) == 0){
         if(fileName == NULL)return -1;
         bytes = remove_dir(fileName,fd);
     }
@@ -92,23 +82,14 @@ int analyzeCalls(char *req,int fd){
 
 // the new functions are being added up here
 int create_dir(char *dirName,int fd){
-    Response res;
     int bytes = mkdir(dirName,0755);
-
-    if(bytes == 0)res.status = STATUS_OK;
-    else res.status = STATUS_ERROR;
-    sendRecursively(fd, &res, sizeof(res));
+    sendStatus(bytes,fd);
     return bytes;
 }
 
 int remove_dir(char *dirName,int fd){
-    Response res;
     int bytes = rmdir(dirName);
-
-    if(bytes == 0)res.status = STATUS_OK;
-    else res.status = STATUS_ERROR;
-    sendRecursively(fd, &res, sizeof(res));
-
+    sendStatus(bytes,fd);
     return bytes;
 }
 
@@ -152,18 +133,22 @@ int change_dir(const char *dirName, int fd){
 }
 
 int delete_func(char *fileName,int fd){
-    Response res;
     int bytes = remove(fileName);
-
-    if(bytes == 0)res.status = STATUS_OK;
-    else res.status = STATUS_ERROR;
-    sendRecursively(fd, &res, sizeof(res));
-
+    sendStatus(bytes,fd);
     return bytes;
 }
 
+void sendStatus(int bytes, int fd){
+    Response res;
+    if(bytes != -1)res.status = STATUS_OK;
+    else res.status = STATUS_ERROR;
+    sendRecursively(fd, &res, sizeof(res));
+}
+
 int listAll(int fd){
-    DIR *dir = opendir("."); // opening the dir and using pointer to point at it
+    Response res;
+
+    DIR *dir = opendir(".");
     if(dir == NULL) return -1;
     struct dirent *entry; // pointer pointing to dirent structure
     int count = 0;

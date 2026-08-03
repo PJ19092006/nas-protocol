@@ -17,6 +17,19 @@
 #define PORT 5000
 #define BUFFER_SIZE 1024
 
+// all the calls
+#define EXIT "EXIT"
+#define LIST_ALL "LS"
+#define GET_CALL "GET"
+#define PUT_CALL "PUT"
+#define GET_CALL "GET"
+#define PRINT_DIR "PWD"
+#define CHANGE_DIR "CD"
+#define DELETE_FILE "DELETE"
+#define CREATE_DIR "MKDIR"
+#define DELETE_DIR "RMDIR"
+
+
 typedef enum{
     STATUS_OK = 0,
     STATUS_ERROR
@@ -28,16 +41,15 @@ typedef struct{
 
 void errNClose(const char *msg,int fd);
 int createSocket();
-// the new added func to common
 int sendRecursively(int sock, const void *buffer, uint32_t length);
 int send_msg (int fd , const void *buffer, uint32_t length);
 int recvHelper(int fd, void *buffer, size_t length);
-char *get_msg(int client_fd, uint32_t *length);
+char *get_msg(int client_fd);
 uint32_t getHeader(int client_fd);
 int getFiles(int fd);
 int get_fileData(int sock,char fileName[]);
-int read_func(int fd,char *fileName);
 size_t get_size(char *fileName);
 char *getArgument(char *req);
+int send_file(int fd, char *fileName);
 
 #endif

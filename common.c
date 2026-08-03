@@ -26,7 +26,7 @@ uint32_t getHeader(int client_fd){
     return length;
 }
 
-//  sending helper methods
+// sending helper methods
 int send_msg (int fd , const void *buffer, uint32_t length){
     uint32_t lengthMsg = htonl(length);
 
@@ -58,18 +58,17 @@ int sendRecursively(int sock, const void *buffer, uint32_t length){
 // all good above this
 
 // get string methods
-char *get_msg(int fd, uint32_t *length){
+char *get_msg(int fd){
     // extracting headder (length)
-    *length  = getHeader(fd);
-    // if(*length > 1000) return NULL; // overlimit memory call
+    int length = getHeader(fd);
 
     // alocating memory
     char *buffer;
-    buffer = (char *) malloc((*length) + 1);
+    buffer = (char *) malloc((length) + 1);
     if(buffer == NULL) return NULL;
 
     // recive the msg
-    int bytes = recvHelper(fd,buffer,(*length));
+    int bytes = recvHelper(fd,buffer,(length));
     if(bytes == -1){
         free(buffer);
         return NULL;
@@ -82,10 +81,9 @@ char *get_msg(int fd, uint32_t *length){
 
 int getFiles(int fd){
     uint32_t totalFiles = getHeader(fd);
-    uint32_t size;
 
     while(totalFiles>0){
-        char *store = get_msg(fd,&size);
+        char *store = get_msg(fd);
         if(store == NULL) return -1;
 
         printf("%s\n",store);
@@ -112,51 +110,62 @@ int recvHelper(int fd, void *buffer, size_t length){
 }
 
 
-int get_fileData(int sock, char fileName[]){
-    uint32_t size;
-    char *file = get_msg(sock,&size);
-    if(file == NULL) return -1;
+// working on this function
+int send_file(int fd, char *fileName){
+    Response res;
 
-	int fileFd = open(fileName, O_WRONLY | O_CREAT | O_TRUNC,0644);
-    if (fileFd == -1){
-        free(file);
-        return -1;
-    }
-
-    int n = write(fileFd,file,size);
-    close(fileFd);
-    free(file);
-
-    return n;
-}
-
-int read_func(int fd,char *fileName){
-
-    size_t size = get_size(fileName);
+    uint64_t size = htonl(get_size(fileName));
     if(size == -1) return -1;
 
+
+    int totalBytesRead = 0;
 	int fileFd = open(fileName, O_RDONLY);
-    if (fileFd == -1) return -1;
     
-    char *ch = malloc(size);
-    if(ch ==NULL){
-        close(fileFd);
+    if(size == -1 || fileFd == -1){
+        res.status = STATUS_ERROR;
+        sendRecursively(fd, &res, sizeof(res));
         return -1;
     }
 
-    int n = read(fileFd,ch,size);
+    res.status = STATUS_OK;
+    sendRecursively(fd, &res, sizeof(res));
+    // sending size
+    sendRecursively(fd,&size,sizeof(size));
 
-    if (n<=0){
-        close(fileFd);
-        free(ch);
-        return -1;
+    char ch[4096];
+    int bytesRead;
+
+    while((bytesRead = read(fileFd,ch,sizeof(ch))) > 0){
+        totalBytesRead += bytesRead;
+        //  here are the new changes 
+        int bytes = sendRecursively(fd,ch,bytesRead);
     }
-
-    int bytes = send_msg(fd,ch,n);
 
     close(fileFd);
-    free(ch);
-    return bytes;
+    return totalBytesRead;
+}
+
+int get_fileData(int sock, char fileName[]){
+    uint64_t length;
+    recvHelper(sock, &length, sizeof(length));
+    
+    uint64_t remaining = length;
+    int fileFd = open(fileName, O_WRONLY | O_CREAT | O_TRUNC,0644);
+    if (fileFd == -1) return -1;
+
+    
+    while(remaining > 0){
+        char ch[4096];
+        size_t chunk = remaining > sizeof(ch)? sizeof(ch): remaining;
+        int bytes = recvHelper(sock,ch,chunk);
+        if(bytes == -1) return -1;
+        int n = write(fileFd,ch,bytes);
+        remaining -= bytes;
+    }
+    
+
+    close(fileFd);
+    return length;
 }
 
 size_t get_size(char *fileName){
