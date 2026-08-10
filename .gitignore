@@ -1,4 +1,8 @@
-client.txt
+# Images
+*.png
+*.jpg
+*.jpeg
+
 new.txt
 PJ_.jpeg
 server.txt
