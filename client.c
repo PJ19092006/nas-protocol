@@ -60,7 +60,7 @@ int listenCalls(char *req, int fd){
             fgets(newFileName,100,stdin);
             newFileName[strcspn(newFileName, "\n")] = '\0'; 
 
-            bytes = send_file(fd,newFileName);
+            bytes = get_fileData(fd,newFileName);
 
         }else{
             printf("Server side error");
@@ -72,7 +72,7 @@ int listenCalls(char *req, int fd){
         fgets(newFileName,100,stdin);
         newFileName[strcspn(newFileName, "\n")] = '\0';
         send_msg(fd,newFileName,strlen(newFileName));
-        bytes = get_fileData(fd,fileName);
+        bytes = send_file(fd,fileName);
     }else if(strcmp(EXIT,req) == 0){
         printf("bye bye!");
         return -1;

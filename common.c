@@ -114,14 +114,16 @@ int recvHelper(int fd, void *buffer, size_t length){
 int send_file(int fd, char *fileName){
     Response res;
 
-    uint64_t size = htonl(get_size(fileName));
-    if(size == -1) return -1;
+    uint64_t fileSize = get_size(fileName);
+    if(fileSize == (uint64_t)-1)return -1;
+    
+    uint64_t networkSize = htonl(fileSize);
 
 
     int totalBytesRead = 0;
 	int fileFd = open(fileName, O_RDONLY);
     
-    if(size == -1 || fileFd == -1){
+    if(networkSize == -1 || fileFd == -1){
         res.status = STATUS_ERROR;
         sendRecursively(fd, &res, sizeof(res));
         return -1;
@@ -130,7 +132,7 @@ int send_file(int fd, char *fileName){
     res.status = STATUS_OK;
     sendRecursively(fd, &res, sizeof(res));
     // sending size
-    sendRecursively(fd,&size,sizeof(size));
+    sendRecursively(fd,&networkSize,sizeof(networkSize));
 
     char ch[4096];
     int bytesRead;
@@ -146,10 +148,13 @@ int send_file(int fd, char *fileName){
 }
 
 int get_fileData(int sock, char fileName[]){
-    uint64_t length;
-    recvHelper(sock, &length, sizeof(length));
+    uint64_t networkLength;
+    int bytes = recvHelper(sock, &networkLength, sizeof(networkLength));
+    if(bytes == -1) return -1;
     
+    uint64_t length = ntohl(networkLength);
     uint64_t remaining = length;
+
     int fileFd = open(fileName, O_WRONLY | O_CREAT | O_TRUNC,0644);
     if (fileFd == -1) return -1;
 
@@ -159,10 +164,13 @@ int get_fileData(int sock, char fileName[]){
         size_t chunk = remaining > sizeof(ch)? sizeof(ch): remaining;
         int bytes = recvHelper(sock,ch,chunk);
         if(bytes == -1) return -1;
-        int n = write(fileFd,ch,bytes);
-        remaining -= bytes;
+        ssize_t written = write(fileFd, ch, bytes);
+        if(written != bytes){
+            close(fileFd);
+            return -1;
+        }
+        remaining -= written;
     }
-    
 
     close(fileFd);
     return length;

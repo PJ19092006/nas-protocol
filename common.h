@@ -22,7 +22,6 @@
 #define LIST_ALL "LS"
 #define GET_CALL "GET"
 #define PUT_CALL "PUT"
-#define GET_CALL "GET"
 #define PRINT_DIR "PWD"
 #define CHANGE_DIR "CD"
 #define DELETE_FILE "DELETE"
