@@ -114,16 +114,17 @@ int recvHelper(int fd, void *buffer, size_t length){
 int send_file(int fd, char *fileName){
     Response res;
 
-    uint64_t fileSize = get_size(fileName);
-    if(fileSize == (uint64_t)-1)return -1;
-    
-    uint64_t networkSize = htonl(fileSize);
+    uint32_t fileSize = get_size(fileName);
+    if(fileSize == (uint32_t)-1)return -1;
+
+    // this value will never even be in the -ve
+    uint32_t networkSize = htonl(fileSize);
 
 
     int totalBytesRead = 0;
 	int fileFd = open(fileName, O_RDONLY);
     
-    if(networkSize == -1 || fileFd == -1){
+    if(fileFd == -1){
         res.status = STATUS_ERROR;
         sendRecursively(fd, &res, sizeof(res));
         return -1;
@@ -140,7 +141,7 @@ int send_file(int fd, char *fileName){
     while((bytesRead = read(fileFd,ch,sizeof(ch))) > 0){
         totalBytesRead += bytesRead;
         //  here are the new changes 
-        int bytes = sendRecursively(fd,ch,bytesRead);
+        sendRecursively(fd,ch,bytesRead);
     }
 
     close(fileFd);

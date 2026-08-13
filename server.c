@@ -12,7 +12,8 @@ int create_dir(char *fileName,int fd);
 int remove_dir(char *dirName,int fd);
 int getWorking_dir(int fd);
 void sendStatus(int bytes, int fd);
-void handle_child(int sig);
+void handle_child();
+int getStat(int fd, char *fileName);
 
 int main(){
     signal(SIGCHLD, handle_child);
@@ -90,10 +91,40 @@ int analyzeCalls(char *req,int fd){
     }else if(strncmp(DELETE_DIR,req,5) == 0){
         if(fileName == NULL)return -1;
         bytes = remove_dir(fileName,fd);
+    }else if(strncmp(STAT_CALL,req,4)==0){
+        if(fileName == NULL) return -1;
+        bytes = getStat(fd,fileName);
     }
 
     if(bytes == -1) return -1;
     return bytes;
+}
+
+int getStat(int fd, char *fileName){
+    struct stat info;
+    Response res;
+
+    if (stat(fileName, &info) != 0) {
+        res.status = STATUS_ERROR;
+
+        if (sendRecursively(fd, &res, sizeof(res)) == -1)
+            return -1;
+
+        return 0;
+    }
+
+    res.status = STATUS_OK;
+
+    if (sendRecursively(fd, &res, sizeof(res)) == -1)
+        return -1;
+
+    FileStat file;
+
+    file.size = info.st_size;
+    file.mode = info.st_mode;
+    file.nlink = info.st_nlink;
+
+    return sendRecursively(fd, &file, sizeof(file));
 }
 
 // the new functions are being added up here
@@ -226,6 +257,7 @@ int establishConnection(){
     return sock;
 }
 
-void handle_child(int sig){
+// removed the sig argument from this function 
+void handle_child(){
     while (waitpid(-1, NULL, WNOHANG) > 0);
 }

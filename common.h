@@ -27,7 +27,7 @@
 #define DELETE_FILE "DELETE"
 #define CREATE_DIR "MKDIR"
 #define DELETE_DIR "RMDIR"
-
+#define STAT_CALL "STAT"
 
 typedef enum{
     STATUS_OK = 0,
@@ -37,6 +37,14 @@ typedef enum{
 typedef struct{
     Status status;
 } Response;
+
+typedef struct {
+    Status status;
+    uint64_t size;
+    uint32_t mode;
+    uint32_t nlink;
+} FileStat;
+
 
 void errNClose(const char *msg,int fd);
 int createSocket();
