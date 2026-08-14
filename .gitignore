@@ -12,4 +12,3 @@ textRecv.txt
 mount.c
 client
 server
-fuse/

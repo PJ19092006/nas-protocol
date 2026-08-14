@@ -12,8 +12,11 @@ int create_dir(char *fileName,int fd);
 int remove_dir(char *dirName,int fd);
 int getWorking_dir(int fd);
 void sendStatus(int bytes, int fd);
-void handle_child();
+void handle_child(int sig);
 int getStat(int fd, char *fileName);
+int hasFlag(char *req);
+int parseGetChunk(char *req,char *fileName,off_t *offset,size_t *size);
+int getFileChunk(int fd,char *fileName,off_t offset,size_t requestedSize);
 
 int main(){
     signal(SIGCHLD, handle_child);
@@ -68,9 +71,19 @@ int analyzeCalls(char *req,int fd){
 
     if(strcmp(LIST_ALL,req) == 0){
         bytes = listAll(fd);
-    }else if(strncmp(GET_CALL,req,3) == 0){
-        if(fileName == NULL)return -1;
-        bytes = send_file(fd,fileName);
+    }else if(strncmp(GET_CALL, req, 3) == 0){
+    if (hasFlag(req)) {
+        char fileName[256];
+        off_t offset;
+        size_t size;
+        if (parseGetChunk(req, fileName, &offset, &size) == -1) return -1;
+
+        bytes = getFileChunk(fd,fileName,offset,size);
+    } else {
+        char *fileName = getArgument(req);
+        if (fileName == NULL)return -1;
+        bytes = send_file(fd, fileName);
+    }
     }else if(strncmp(PUT_CALL,req,3) == 0){
         char *newFileName = get_msg(fd);
         bytes = get_fileData(fd,newFileName);
@@ -98,6 +111,113 @@ int analyzeCalls(char *req,int fd){
 
     if(bytes == -1) return -1;
     return bytes;
+}
+
+int hasFlag(char *req){
+    return strstr(req, FUSE_FLAG) != NULL;
+}
+
+int parseGetChunk(char *req,char *fileName,off_t *offset,size_t *size){
+    char flag[10];
+
+    int result = sscanf(req,"GET %255s %9s %ld %zu",fileName,flag,offset,size);
+
+    if (result != 4)
+        return -1;
+
+    if (strcmp(flag, FUSE_FLAG) != 0)
+        return -1;
+
+    return 0;
+}
+
+int getFileChunk(int fd,char *fileName,off_t offset,size_t requestedSize){
+
+    Response res;
+    int fileFd = open(fileName, O_RDONLY);
+    if (fileFd == -1) {
+        res.status = STATUS_ERROR;
+        sendRecursively(fd, &res, sizeof(res));
+        return -1;
+    }
+
+    off_t fileSize = get_size(fileName);
+
+    if (fileSize < 0) {
+        close(fileFd);
+
+        res.status = STATUS_ERROR;
+        sendRecursively(fd, &res, sizeof(res));
+        return -1;
+    }
+
+    // If FUSE asks beyond EOF.
+    if (offset >= fileSize) {
+
+        res.status = STATUS_OK;
+        sendRecursively(fd, &res, sizeof(res));
+
+        uint64_t zero = 0;
+        uint64_t networkZero = htobe64(zero);
+
+        sendRecursively(fd,&networkZero,sizeof(networkZero));
+        close(fileFd);
+        return 0;
+    }
+
+    // bytes requested
+    size_t bytesToSend = requestedSize;
+
+    if (offset + bytesToSend > fileSize) bytesToSend = fileSize - offset;
+
+    // changing the offset (to requested)
+    if (lseek(fileFd, offset, SEEK_SET) == -1) {
+        close(fileFd);
+        res.status = STATUS_ERROR;
+        sendRecursively(fd, &res, sizeof(res));
+        return -1;
+    }
+
+    res.status = STATUS_OK;
+
+    // sending the status
+    if (sendRecursively(fd,&res,sizeof(res)) == -1) {
+        close(fileFd);
+        return -1;
+    }
+
+    // sending bytes size
+    uint64_t networkSize = htobe64(bytesToSend);
+
+    if (sendRecursively(fd,&networkSize,sizeof(networkSize)) == -1) {
+        close(fileFd);
+        return -1;
+    }
+
+    char chunk[4096];
+    size_t remaining = bytesToSend;
+
+    while (remaining > 0) {
+
+        size_t toRead = remaining > sizeof(chunk)? sizeof(chunk): remaining;
+
+        ssize_t bytesRead = read(fileFd, chunk, toRead);
+
+        if (bytesRead <= 0) {
+            close(fileFd);
+            return -1;
+        }
+
+        if (sendRecursively(fd,chunk,bytesRead) == -1) {
+            close(fileFd);
+            return -1;
+        }
+
+        remaining -= bytesRead;
+    }
+
+    close(fileFd);
+    return bytesToSend;
 }
 
 int getStat(int fd, char *fileName){
@@ -198,29 +318,45 @@ int listAll(int fd){
     if(dir == NULL) return -1;
     struct dirent *entry; // pointer pointing to dirent structure
     int count = 0;
-
-	while ((entry = readdir(dir)) != NULL) {
-        count ++;
-	}
+    
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 ||strcmp(entry->d_name, "..") == 0) continue;
+        count++;
+    }
 
     uint32_t totalFiles = htonl(count);
     sendRecursively(fd,&totalFiles,sizeof(totalFiles));
-
     closedir(dir);
 
     dir = opendir(".");
     if(dir == NULL) return -1;
     int totalBytes = 0;
-    for(int i = 0; i<count; i++){
-        entry = readdir(dir);
-        char *file = entry->d_name;
-        int bytes = send_msg(fd,file,strlen(file));
-        if(bytes == -1){
-            closedir(dir);
-            return -1;
-        }
-        totalBytes += bytes;
+
+    //  to be formmated here
+    for (int i = 0; i < count; ) {
+
+    entry = readdir(dir);
+
+    if (entry == NULL)
+        break;
+
+    if (strcmp(entry->d_name, ".") == 0 ||
+        strcmp(entry->d_name, "..") == 0) {
+        continue;
     }
+
+    char *file = entry->d_name;
+
+    int bytes = send_msg(fd, file, strlen(file));
+
+    if (bytes == -1) {
+        closedir(dir);
+        return -1;
+    }
+
+    totalBytes += bytes;
+    i++;
+}
 
     closedir(dir);
     return totalBytes;
@@ -257,7 +393,7 @@ int establishConnection(){
     return sock;
 }
 
-// removed the sig argument from this function 
-void handle_child(){
+void handle_child(int sig){
+    (void)sig;
     while (waitpid(-1, NULL, WNOHANG) > 0);
 }

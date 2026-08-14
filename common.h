@@ -13,6 +13,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/socket.h> 
+#include <endian.h>
 
 #define PORT 5000
 #define BUFFER_SIZE 1024
@@ -28,6 +29,7 @@
 #define CREATE_DIR "MKDIR"
 #define DELETE_DIR "RMDIR"
 #define STAT_CALL "STAT"
+#define FUSE_FLAG "-f"
 
 typedef enum{
     STATUS_OK = 0,
