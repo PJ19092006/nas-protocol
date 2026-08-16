@@ -2,9 +2,11 @@
 #include <signal.h>
 #include <sys/wait.h>
 
+
+
 int establishConnection();
 int analyzeCalls(char *req, int fd); 
-int listAll(int fd);
+int listAll(int fd, char *dirName);
 int bindSocket(int sock);
 int delete_func(char *fileName,int fd);
 int change_dir(const char *dirname,int fd);
@@ -17,6 +19,10 @@ int getStat(int fd, char *fileName);
 int hasFlag(char *req);
 int parseGetChunk(char *req,char *fileName,off_t *offset,size_t *size);
 int getFileChunk(int fd,char *fileName,off_t offset,size_t requestedSize);
+int handle_truncate(int fd, char *fileName);
+int handle_rename(int fd);
+int handle_utimens(int fd, char *fileName);
+int handle_chmod(int fd, char *fileName);
 
 int main(){
     signal(SIGCHLD, handle_child);
@@ -69,8 +75,8 @@ int analyzeCalls(char *req,int fd){
     char *fileName = getArgument(req);
     int bytes=-1;
 
-    if(strcmp(LIST_ALL,req) == 0){
-        bytes = listAll(fd);
+    if(strncmp(LIST_ALL,req,2) == 0){
+        bytes = listAll(fd, fileName);
     }else if(strncmp(GET_CALL, req, 3) == 0){
     if (hasFlag(req)) {
         char fileName[256];
@@ -85,9 +91,9 @@ int analyzeCalls(char *req,int fd){
         bytes = send_file(fd, fileName);
     }
     }else if(strncmp(PUT_CALL,req,3) == 0){
-        char *newFileName = get_msg(fd);
-        bytes = get_fileData(fd,newFileName);
-        free(newFileName);
+        // char *newFileName = get_msg(fd);
+        bytes = get_fileData(fd,fileName);
+        // free(newFileName);
     }else if(strncmp(DELETE_FILE,req,6) == 0){
         if(fileName == NULL)return -1;
         bytes = delete_func(fileName,fd);
@@ -107,6 +113,17 @@ int analyzeCalls(char *req,int fd){
     }else if(strncmp(STAT_CALL,req,4)==0){
         if(fileName == NULL) return -1;
         bytes = getStat(fd,fileName);
+    }else if(strncmp(TRUNCATE_CALL,req,5)==0){
+        if(fileName == NULL) return -1;
+        bytes = handle_truncate(fd,fileName);
+    }else if(strncmp(RENAME_CALL, req, 3) == 0){
+        bytes = handle_rename(fd);
+    }else if(strncmp(UTIMENS_CALL, req, 4) == 0){
+        if (fileName == NULL) return -1;
+        bytes = handle_utimens(fd, fileName);
+    } else if(strncmp(CHMOD_CALL, req, 3) == 0){
+        if (fileName == NULL) return -1;
+        bytes = handle_chmod(fd, fileName);
     }
 
     if(bytes == -1) return -1;
@@ -138,7 +155,7 @@ int getFileChunk(int fd,char *fileName,off_t offset,size_t requestedSize){
     if (fileFd == -1) {
         res.status = STATUS_ERROR;
         sendRecursively(fd, &res, sizeof(res));
-        return -1;
+        return 0;
     }
 
     off_t fileSize = get_size(fileName);
@@ -148,7 +165,7 @@ int getFileChunk(int fd,char *fileName,off_t offset,size_t requestedSize){
 
         res.status = STATUS_ERROR;
         sendRecursively(fd, &res, sizeof(res));
-        return -1;
+        return 0;
     }
 
     // If FUSE asks beyond EOF.
@@ -175,7 +192,7 @@ int getFileChunk(int fd,char *fileName,off_t offset,size_t requestedSize){
         close(fileFd);
         res.status = STATUS_ERROR;
         sendRecursively(fd, &res, sizeof(res));
-        return -1;
+        return 0;
     }
 
     res.status = STATUS_OK;
@@ -226,23 +243,19 @@ int getStat(int fd, char *fileName){
 
     if (stat(fileName, &info) != 0) {
         res.status = STATUS_ERROR;
-
-        if (sendRecursively(fd, &res, sizeof(res)) == -1)
-            return -1;
-
+        sendRecursively(fd, &res, sizeof(res));
         return 0;
     }
 
     res.status = STATUS_OK;
-
-    if (sendRecursively(fd, &res, sizeof(res)) == -1)
-        return -1;
+    sendRecursively(fd, &res, sizeof(res));
 
     FileStat file;
-
     file.size = info.st_size;
     file.mode = info.st_mode;
     file.nlink = info.st_nlink;
+    file.atime = info.st_atim;
+    file.mtime = info.st_mtim;
 
     return sendRecursively(fd, &file, sizeof(file));
 }
@@ -312,10 +325,16 @@ void sendStatus(int bytes, int fd){
     sendRecursively(fd, &res, sizeof(res));
 }
 
-int listAll(int fd){
+int listAll(int fd, char *dirName){
+    printf("%s\n",dirName);
+    DIR *dir = opendir(dirName);
 
-    DIR *dir = opendir(".");
-    if(dir == NULL) return -1;
+    if(dir == NULL) {
+        uint32_t zero = 0;
+        sendRecursively(fd, &zero, sizeof(zero)); // Tell client: 0 files
+        return 0; // Keep the server alive!
+    }
+
     struct dirent *entry; // pointer pointing to dirent structure
     int count = 0;
     
@@ -328,7 +347,7 @@ int listAll(int fd){
     sendRecursively(fd,&totalFiles,sizeof(totalFiles));
     closedir(dir);
 
-    dir = opendir(".");
+    dir = opendir(dirName);
     if(dir == NULL) return -1;
     int totalBytes = 0;
 
@@ -376,6 +395,95 @@ int bindSocket(int sock){
     );
 
     return bindRes;
+}
+
+int handle_truncate(int fd, char *fileName){
+    Response res;
+    uint64_t networkSize;
+
+    if (recvHelper(fd, &networkSize, sizeof(networkSize)) == -1) return -1;
+    uint64_t targetSize = be64toh(networkSize);
+
+    int result = truncate(fileName, (off_t)targetSize);
+
+    if (result == -1) {
+        res.status = STATUS_ERROR;
+        sendRecursively(fd, &res, sizeof(res));
+        return -1;
+    }
+
+    res.status = STATUS_OK;
+    sendRecursively(fd, &res, sizeof(res));
+    return 0;
+}
+
+int handle_rename(int fd){
+    Response res;
+    
+
+    char *oldName = get_msg(fd);
+    if (oldName == NULL) return -1;
+
+    char *newName = get_msg(fd);
+    if (newName == NULL) {
+        free(oldName);
+        return -1;
+    }
+
+    int result = rename(oldName, newName);
+
+    free(oldName);
+    free(newName);
+
+    if (result == -1) {
+        res.status = STATUS_ERROR;
+        sendRecursively(fd, &res, sizeof(res));
+        return -1;
+    }
+
+    res.status = STATUS_OK;
+    sendRecursively(fd, &res, sizeof(res));
+    return 0;
+}
+
+int handle_utimens(int fd, char *fileName){
+    Response res;
+    struct timespec tv[2];
+
+    if (recvHelper(fd, tv, sizeof(tv)) == -1) return -1;
+
+    // AT_FDCWD means relative to current working directory
+    int result = utimensat(AT_FDCWD, fileName, tv, 0);
+
+    if (result == -1) {
+        res.status = STATUS_ERROR;
+        sendRecursively(fd, &res, sizeof(res));
+        return -1;
+    }
+
+    res.status = STATUS_OK;
+    sendRecursively(fd, &res, sizeof(res));
+    return 0;
+}
+
+int handle_chmod(int fd, char *fileName){
+    Response res;
+    uint32_t networkMode;
+
+    if (recvHelper(fd, &networkMode, sizeof(networkMode)) == -1) return -1;
+    mode_t newMode = (mode_t)ntohl(networkMode);
+
+    int result = chmod(fileName, newMode);
+
+    if (result == -1) {
+        res.status = STATUS_ERROR;
+        sendRecursively(fd, &res, sizeof(res));
+        return -1;
+    }
+
+    res.status = STATUS_OK;
+    sendRecursively(fd, &res, sizeof(res));
+    return 0;
 }
 
 int establishConnection(){

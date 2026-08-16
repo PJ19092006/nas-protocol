@@ -151,15 +151,18 @@ int send_file(int fd, char *fileName){
 int get_fileData(int sock, char fileName[]){
     uint64_t networkLength;
     int bytes = recvHelper(sock, &networkLength, sizeof(networkLength));
-    if(bytes == -1) return -1;
     
-    uint64_t length = ntohl(networkLength);
+    Response res;
+    int fileFd = open(fileName, O_WRONLY | O_CREAT | O_TRUNC,0644);
+    if (fileFd == -1 || bytes == -1) {
+        res.status = STATUS_ERROR;
+        sendRecursively(sock, &res, sizeof(res));
+        return -1;
+    }
+
+    uint64_t length = be64toh(networkLength);
     uint64_t remaining = length;
 
-    int fileFd = open(fileName, O_WRONLY | O_CREAT | O_TRUNC,0644);
-    if (fileFd == -1) return -1;
-
-    
     while(remaining > 0){
         char ch[4096];
         size_t chunk = remaining > sizeof(ch)? sizeof(ch): remaining;
@@ -173,6 +176,8 @@ int get_fileData(int sock, char fileName[]){
         remaining -= written;
     }
 
+    res.status = STATUS_OK;
+    sendRecursively(sock, &res, sizeof(res));
     close(fileFd);
     return length;
 }

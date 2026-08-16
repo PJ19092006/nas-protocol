@@ -1,6 +1,8 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#define _GNU_SOURCE
+#define _POSIX_C_SOURCE 200809L
 #include <stdint.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -14,6 +16,8 @@
 #include <sys/stat.h>
 #include <sys/socket.h> 
 #include <endian.h>
+
+
 
 #define PORT 5000
 #define BUFFER_SIZE 1024
@@ -29,7 +33,13 @@
 #define CREATE_DIR "MKDIR"
 #define DELETE_DIR "RMDIR"
 #define STAT_CALL "STAT"
+
+// calls made for FUSE ONLY
+#define RENAME_CALL "REN"
 #define FUSE_FLAG "-f"
+#define TRUNCATE_CALL "TRUNC"
+#define UTIMENS_CALL "TIME"
+#define CHMOD_CALL "MOD"
 
 typedef enum{
     STATUS_OK = 0,
@@ -45,6 +55,8 @@ typedef struct {
     uint64_t size;
     uint32_t mode;
     uint32_t nlink;
+    struct timespec atime;
+    struct timespec mtime;   
 } FileStat;
 
 
