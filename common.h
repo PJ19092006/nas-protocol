@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <dirent.h> 
 #include <string.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/socket.h> 
@@ -43,7 +44,8 @@
 
 typedef enum{
     STATUS_OK = 0,
-    STATUS_ERROR
+    STATUS_ERROR,
+    STATUS_NOT_EMPTY,
 } Status;
 
 typedef struct{

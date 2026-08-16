@@ -268,8 +268,18 @@ int create_dir(char *dirName,int fd){
 }
 
 int remove_dir(char *dirName,int fd){
-    int bytes = rmdir(dirName);
-    sendStatus(bytes,fd);
+    Response res;
+    int bytes;
+    if (bytes = rmdir(dirName) == -1) {
+        if (errno == ENOTEMPTY || errno == EEXIST) {
+            res.status = STATUS_NOT_EMPTY;
+        } else {
+            res.status = STATUS_ERROR; 
+        }
+    } else {
+        res.status = STATUS_OK;
+    }
+    send(fd, &res, sizeof(res), 0);
     return bytes;
 }
 
