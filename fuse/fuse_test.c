@@ -5,6 +5,7 @@
 #include <pthread.h>
 
 #define PORT 5000
+#define SERVER_IP "127.0.0.1"
 #define TIMEOUT_SEC 5 
 
 typedef struct {
@@ -32,7 +33,7 @@ static int get_thread_socket() {
     struct sockaddr_in server = {0};
     server.sin_family = AF_INET;
     server.sin_port = htons(PORT);
-    server.sin_addr.s_addr = inet_addr("127.0.0.1");
+    server.sin_addr.s_addr = inet_addr(SERVER_IP);
 
     if (connect(sock, (struct sockaddr *)&server, sizeof(server)) == -1) {
         perror("connect (reconnect failed)");
