@@ -1,15 +1,6 @@
 #include "../common.h"
 #define FUSE_USE_VERSION 31
-
 #include <fuse3/fuse.h>
-#include <stdio.h>
-#include <string.h>
-#include <errno.h>
-#include <sys/stat.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <stdint.h>
 #include <sys/time.h>
 #include <pthread.h>
 
@@ -177,9 +168,6 @@ static int my_rmdir(const char *path) {
         pthread_mutex_unlock(&thread_slot.lock);
 
         if (res.status == STATUS_NOT_EMPTY) return -ENOTEMPTY; // If you define a specific status
-        if (res.status != STATUS_OK) return -ENOENT;
-        return 0;
-
         if (res.status != STATUS_OK) return -ENOENT;
         return 0;
     }

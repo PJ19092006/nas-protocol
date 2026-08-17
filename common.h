@@ -19,7 +19,6 @@
 #include <endian.h>
 
 
-
 #define PORT 5000
 #define BUFFER_SIZE 1024
 
@@ -44,8 +43,8 @@
 
 typedef enum{
     STATUS_OK = 0,
-    STATUS_ERROR,
-    STATUS_NOT_EMPTY,
+    STATUS_ERROR = -1,
+    STATUS_NOT_EMPTY = 1,
 } Status;
 
 typedef struct{
