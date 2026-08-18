@@ -35,7 +35,7 @@ The common networking helpers handle:
 * Variable-length messages
 * Binary payload transfers
 
-# 📁 Project Structure
+# Project Structure
 
 ```text
 .
@@ -150,7 +150,7 @@ Requests use text-based command headers followed by optional binary payloads, si
 
 ---
 
-# 📦 Response Status
+# Response Status
 
 Operations use a standardized response status.
 
@@ -162,7 +162,7 @@ Operations use a standardized response status.
 
 ---
 
-# 📋 Supported Operations
+# Supported Operations
 
 | Operation          | Command                             | Description                                                                                       |
 | ------------------ | ----------------------------------- | ------------------------------------------------------------------------------------------------- |
@@ -184,7 +184,7 @@ Operations use a standardized response status.
 
 ---
 
-# 🔐 File Operations
+# File Operations
 
 The protocol supports both complete-file transfers and partial transfers.
 
