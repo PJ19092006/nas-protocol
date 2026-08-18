@@ -49,7 +49,7 @@ The common networking helpers handle:
 
 ---
 
-# 🛠️ Requirements
+# Requirements
 
 Currently its only designed for Linux.
 
@@ -142,7 +142,7 @@ fusermount -u ~/remote_folder
 
 ---
 
-# 📡 Protocol Specification
+# Protocol Specification
 
 Communication between the client and server uses a custom application-layer protocol over TCP.
 
