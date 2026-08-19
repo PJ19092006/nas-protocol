@@ -5,7 +5,7 @@
 #include <pthread.h>
 
 #define PORT 5000
-#define SERVER_IP "127.0.0.1"
+#define SERVER_IP "10.42.0.250"
 #define TIMEOUT_SEC 5 
 
 typedef struct {
@@ -540,14 +540,24 @@ static int my_read(const char *path, char *buffer, size_t size, off_t offset, st
         }
 
         uint64_t chunkSize = be64toh(networkSize);
-        if (chunkSize > size) {
+        if (chunkSize > (uint64_t)size) {
             pthread_mutex_unlock(&thread_slot.lock);
             return -EIO;
         }
 
-        if (recvHelper(sockFd, buffer, chunkSize) == -1) {
-            pthread_mutex_unlock(&thread_slot.lock);
-            invalidate_thread_socket();
+        // Safely loop or read the exact chunk bytes
+        size_t totalRead = 0;
+        while (totalRead < chunkSize) {
+            ssize_t bytesRead = recvHelper(sockFd, buffer + totalRead, chunkSize - totalRead);
+            if (bytesRead <= 0) {
+                pthread_mutex_unlock(&thread_slot.lock);
+                invalidate_thread_socket();
+                break;
+            }
+            totalRead += bytesRead;
+        }
+
+        if (totalRead != chunkSize) {
             continue;
         }
 
