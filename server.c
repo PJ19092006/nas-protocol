@@ -25,6 +25,13 @@ int handleGetReq(int fd , char *fileName, char *req);
 int isEOF(off_t offset,off_t fileSize,int fd);
 
 int main(){
+    const char *server_root = "/home/paru/tea";
+
+    if (chdir(server_root) != 0) {
+        perror("Failed to change server root directory");
+        exit(EXIT_FAILURE);
+    }
+
     signal(SIGCHLD, handle_child);
     int sock = establishConnection();
     if (sock == -1)errNClose("socket", sock);
