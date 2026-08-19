@@ -127,17 +127,26 @@ int hasFlag(char *req){
     return strstr(req, FUSE_FLAG) != NULL;
 }
 
-int parseGetChunk(char *req,char *fileName,off_t *offset,size_t *size){
-    char flag[10];
+int parseGetChunk(char *req, char *fileName, off_t *offset, size_t *size) {
 
-    int result = sscanf(req,"GET %255s %9s %ld %zu",fileName,flag,offset,size);
+    char *flag_ptr = strstr(req, FUSE_FLAG);
+    if (!flag_ptr) return -1;
 
-    if (result != 4) return -1;
+    if (sscanf(flag_ptr, "%*s %ld %zu", offset, size) != 2) return -1;
 
-    if (strcmp(flag, FUSE_FLAG) != 0) return -1;
+    char *name_start = req + 4;
+    size_t name_len = flag_ptr - name_start;
+    
+    while (name_len > 0 && name_start[name_len - 1] == ' ') name_len--;
+
+    if (name_len >= 256) return -1;
+
+    strncpy(fileName, name_start, name_len);
+    fileName[name_len] = '\0';
 
     return 0;
 }
+
 
 int handleGetReq(int fd , char *fileName, char *req){
     int bytes;
