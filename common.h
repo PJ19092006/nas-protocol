@@ -70,7 +70,7 @@ char *get_msg(int client_fd);
 uint32_t getHeader(int client_fd);
 int getFiles(int fd);
 int get_fileData(int sock,char fileName[]);
-size_t get_size(char *fileName);
+off_t get_size(char *fileName);
 char *getArgument(char *req);
 int send_file(int fd, char *fileName);
 

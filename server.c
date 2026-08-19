@@ -191,40 +191,46 @@ int isEOF( off_t offset, off_t fileSize, int fd){
     return 1;
 }
 
-int getFileChunk(int fd,char *fileName,off_t offset,size_t requestedSize){
+int getFileChunk(int fd, char *fileName, off_t offset, size_t requestedSize) {
     int ret;
     Response res;
 
     int fileFd = open(fileName, O_RDONLY);
-    off_t fileSize = get_size(fileName);
-
-    if (fileSize < 0 || fileFd == -1) {
-        close(fileFd);
-        sendStatus(STATUS_ERROR,fd);
+    if (fileFd == -1) {
+        sendStatus(STATUS_ERROR, fd);
         return 0;
     }
 
-    ret = isEOF(offset,fileSize,fd);
-    if(ret == 0){
+    off_t fileSize = get_size(fileName);
+    if (fileSize < 0) {
+        close(fileFd);
+        sendStatus(STATUS_ERROR, fd);
+        return 0;
+    }
+
+    ret = isEOF(offset, fileSize, fd);
+    if (ret == 0) {
         close(fileFd);
         return 0;
     }
 
     size_t bytesToSend = requestedSize;
-    if (offset + bytesToSend > fileSize) bytesToSend = fileSize - offset;
+    if (offset + (off_t)bytesToSend > fileSize) {
+        bytesToSend = (size_t)(fileSize - offset);
+    }
 
     ret = lseek(fileFd, offset, SEEK_SET);
     if (ret == -1) {
         close(fileFd);
-        sendStatus(STATUS_ERROR,fd);
+        sendStatus(STATUS_ERROR, fd);
         return -1;
     }
 
-    sendStatus(STATUS_OK,fd);
+    sendStatus(STATUS_OK, fd);
 
     // sending bytes size
     uint64_t networkSize = htobe64(bytesToSend);
-    ret = sendRecursively(fd,&networkSize,sizeof(networkSize)); 
+    ret = sendRecursively(fd, &networkSize, sizeof(networkSize)); 
     if (ret == -1) {
         close(fileFd);
         return -1;
@@ -234,17 +240,15 @@ int getFileChunk(int fd,char *fileName,off_t offset,size_t requestedSize){
     size_t remaining = bytesToSend;
 
     while (remaining > 0) {
-
-        size_t toRead = remaining > sizeof(chunk)? sizeof(chunk): remaining;
+        size_t toRead = remaining > sizeof(chunk) ? sizeof(chunk) : remaining;
 
         ssize_t bytesRead = read(fileFd, chunk, toRead);
-
         if (bytesRead <= 0) {
             close(fileFd);
             return -1;
         }
 
-        if (sendRecursively(fd,chunk,bytesRead) == -1) {
+        if (sendRecursively(fd, chunk, bytesRead) == -1) {
             close(fileFd);
             return -1;
         }

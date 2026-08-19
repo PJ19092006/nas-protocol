@@ -109,21 +109,17 @@ int recvHelper(int fd, void *buffer, size_t length){
     return bytes;
 }
 
-
-// working on this function
 int send_file(int fd, char *fileName){
     Response res;
 
-    uint32_t fileSize = get_size(fileName);
-    if(fileSize == (uint32_t)-1)return -1;
+    off_t fileSize = get_size(fileName);
+    if(fileSize == (off_t)-1) {
+        res.status = STATUS_ERROR;
+        sendRecursively(fd, &res, sizeof(res));
+        return -1;
+    }
 
-    // this value will never even be in the -ve
-    uint32_t networkSize = htonl(fileSize);
-
-
-    int totalBytesRead = 0;
-	int fileFd = open(fileName, O_RDONLY);
-    
+    int fileFd = open(fileName, O_RDONLY);
     if(fileFd == -1){
         res.status = STATUS_ERROR;
         sendRecursively(fd, &res, sizeof(res));
@@ -131,21 +127,32 @@ int send_file(int fd, char *fileName){
     }
 
     res.status = STATUS_OK;
-    sendRecursively(fd, &res, sizeof(res));
-    // sending size
-    sendRecursively(fd,&networkSize,sizeof(networkSize));
+    if (sendRecursively(fd, &res, sizeof(res)) == -1) {
+        close(fileFd);
+        return -1;
+    }
+
+    // Send 64-bit file size in big-endian network byte order
+    uint64_t networkSize = htobe64((uint64_t)fileSize);
+    if (sendRecursively(fd, &networkSize, sizeof(networkSize)) == -1) {
+        close(fileFd);
+        return -1;
+    }
 
     char ch[4096];
-    int bytesRead;
+    off_t totalBytesRead = 0;
+    ssize_t bytesRead;
 
-    while((bytesRead = read(fileFd,ch,sizeof(ch))) > 0){
+    while((bytesRead = read(fileFd, ch, sizeof(ch))) > 0){
+        if (sendRecursively(fd, ch, bytesRead) == -1) {
+            close(fileFd);
+            return -1;
+        }
         totalBytesRead += bytesRead;
-        //  here are the new changes 
-        sendRecursively(fd,ch,bytesRead);
     }
 
     close(fileFd);
-    return totalBytesRead;
+    return (int)totalBytesRead;
 }
 
 int get_fileData(int sock, char fileName[]){
@@ -182,16 +189,12 @@ int get_fileData(int sock, char fileName[]){
     return length;
 }
 
-size_t get_size(char *fileName){
-    struct stat info; // Stat structure using it as info
-    size_t size = -1;
-
-	int n = stat(fileName,&info);
-	if(n == 0){
-        size = info.st_size;
-	}
-
-    return size;
+off_t get_size(char *fileName){
+    struct stat info;
+    if (stat(fileName, &info) != 0) {
+        return -1;
+    }
+    return info.st_size;
 }
 
 char *getArgument(char *req){
