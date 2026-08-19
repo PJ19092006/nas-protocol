@@ -23,6 +23,8 @@ int handle_utimens(int fd, char *fileName);
 int handle_chmod(int fd, char *fileName);
 int handleGetReq(int fd , char *fileName, char *req);
 int isEOF(off_t offset,off_t fileSize,int fd);
+int handlePutReq(int fd , char *fileName, char *req);
+int putFileChunk(int fd, char *fileName, off_t offset, size_t requestedSize);
 
 int main(){
     const char *server_root = "/home/paru/tea";
@@ -92,7 +94,7 @@ int analyzeCalls(char *req,int fd){
 
     }else if(strncmp(PUT_CALL,req,3) == 0){
         // char *newFileName = get_msg(fd);
-        bytes = get_fileData(fd,fileName);
+        bytes = handlePutReq(fd,fileName,req);
         // free(newFileName);
     }else if(strncmp(DELETE_FILE,req,6) == 0){
         if(fileName == NULL)return -1;
@@ -132,6 +134,66 @@ int analyzeCalls(char *req,int fd){
 
 int hasFlag(char *req){
     return strstr(req, FUSE_FLAG) != NULL;
+}
+
+int handlePutReq(int fd , char *fileName, char *req){
+    int bytes;
+    if (hasFlag(req)) {
+        char cleanFileName[256];
+        off_t offset;
+        size_t size;
+
+        if (parseGetChunk(req, cleanFileName, &offset, &size) == -1) {
+            sendStatus(STATUS_ERROR, fd);
+            return 0;
+        }
+
+        bytes = putFileChunk(fd, cleanFileName, offset, size);
+    } else {
+        bytes = get_fileData(fd, fileName);
+    }
+
+    return bytes;
+}
+
+int putFileChunk(int fd, char *fileName, off_t offset, size_t requestedSize) {
+    int fileFd = open(fileName, O_WRONLY | O_CREAT, 0664);
+    if (fileFd == -1) {
+        sendStatus(STATUS_ERROR, fd);
+        return 0;
+    }
+
+    if (lseek(fileFd, offset, SEEK_SET) == -1) {
+        close(fileFd);
+        sendStatus(STATUS_ERROR, fd);
+        return -1;
+    }
+
+    char chunk[4096];
+    size_t remaining = requestedSize;
+
+    while (remaining > 0) {
+        size_t toRead = remaining > sizeof(chunk) ? sizeof(chunk) : remaining;
+        
+        ssize_t bytesReceived = recvHelper(fd, chunk, toRead);
+        if (bytesReceived <= 0) {
+            close(fileFd);
+            return -1;
+        }
+
+        ssize_t bytesWritten = write(fileFd, chunk, bytesReceived);
+        if (bytesWritten <= 0) {
+            close(fileFd);
+            sendStatus(STATUS_ERROR, fd);
+            return -1;
+        }
+
+        remaining -= bytesWritten;
+    }
+
+    close(fileFd);
+    sendStatus(STATUS_OK, fd);
+    return requestedSize;
 }
 
 int parseGetChunk(char *req, char *fileName, off_t *offset, size_t *size) {

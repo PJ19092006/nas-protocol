@@ -254,21 +254,16 @@ static int my_write(const char *path, const char *buf, size_t size, off_t offset
     printf("write called: %s | size=%zu | offset=%ld\n", path, size, offset);
     const char *fileName = path + 1;
     char request[BUFFER_SIZE];
-    snprintf(request, sizeof(request), "%s %s", PUT_CALL, fileName);
+    
+    snprintf(request, sizeof(request), "%s %s %s %ld %zu", PUT_CALL, fileName, FUSE_FLAG, offset, size);
 
     for (int attempt = 0; attempt < 2; attempt++) {
         int sockFd = get_thread_socket();
         if (sockFd == -1) return -EIO;
 
         pthread_mutex_lock(&thread_slot.lock);
+        
         if (send_msg(sockFd, request, strlen(request)) == -1) {
-            pthread_mutex_unlock(&thread_slot.lock);
-            invalidate_thread_socket();
-            continue;
-        }
-
-        uint64_t networkSize = htobe64(size);
-        if (sendRecursively(sockFd, &networkSize, sizeof(networkSize)) == -1) {
             pthread_mutex_unlock(&thread_slot.lock);
             invalidate_thread_socket();
             continue;
@@ -286,6 +281,7 @@ static int my_write(const char *path, const char *buf, size_t size, off_t offset
             invalidate_thread_socket();
             continue;
         }
+          
         pthread_mutex_unlock(&thread_slot.lock);
 
         if (res.status != STATUS_OK) return -EIO;
